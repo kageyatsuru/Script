@@ -1,0 +1,302 @@
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+
+local Window = Rayfield:CreateWindow({
+   Name = "Ori's Forge Ex3",
+   Icon = 0, -- Icon in Topbar. Can use Lucide Icons (string) or Roblox Image (number). 0 to use no icon (default).
+   LoadingTitle = "3xe",
+   LoadingSubtitle = "By Ori",
+   ShowText = "Rayfield", -- for mobile users to unhide rayfield, change if you'd like
+   Theme = "Default", -- Check https://docs.sirius.menu/rayfield/configuration/themes
+
+   ToggleUIKeybind = "X", -- The keybind to toggle the UI visibility (string like "K" or Enum.KeyCode)
+
+   DisableRayfieldPrompts = false,
+   DisableBuildWarnings = false, -- Prevents Rayfield from warning when the script has a version mismatch with the interface
+
+   ConfigurationSaving = {
+      Enabled = true,
+      FolderName = nil, -- Create a custom folder for your hub/game
+      FileName = "Ex3"
+   },
+
+   Discord = {
+      Enabled = false, -- Prompt the user to join your Discord server if their executor supports it
+      Invite = "noinvitelink", -- The Discord invite code, do not include discord.gg/. E.g. discord.gg/ ABCD would be ABCD
+      RememberJoins = true -- Set this to false to make them join the discord every time they load it up
+   },
+
+   KeySystem = false, -- Set this to true to use our key system
+   KeySettings = {
+      Title = "Untitled",
+      Subtitle = "Key System",
+      Note = "No method of obtaining the key is provided", -- Use this to tell the user how to get a key
+      FileName = "Key", -- It is recommended to use something unique as other scripts using Rayfield may overwrite your key file
+      SaveKey = true, -- The user's key will be saved, but if you change the key, they will be unable to use your script
+      GrabKeyFromSite = false, -- If this is true, set Key below to the RAW site you would like Rayfield to get the key from
+      Key = {"Hello"} -- List of keys that will be accepted by the system, can be RAW file links (pastebin, github etc) or simple strings ("hello","key22")
+   }
+})
+
+local Tab = Window:CreateTab("Forge 3xe", 4483362458) -- Title, Image
+
+local Section = Tab:CreateSection("Section Example")
+
+local Button = Tab:CreateButton({
+   Name = "Sell Ores (MUST INTERACT WITH GREEDY CEY FIRST)",
+   Callback = function()
+local args = {
+	"SellConfirm",
+	{
+		Basket = {
+             Tin = 1, Mushroomite =1, Gold = 1, Cobalt = 1, Titanium = 1, Quartz = 1, Amethyst = 1, Topaz = 1, Diamond = 1, Sapphire = 1, Cuprite = 1, Platinum = 1, Silver = 1, Stone = 1, Copper = 1, Iron = 1, Tin = 1, Bananite = 1, Cardboardite = 1, Aite = 1, Poopite = 1 
+		}
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DialogueService"):WaitForChild("RF"):WaitForChild("RunCommand"):InvokeServer(unpack(args))
+
+
+local args = {
+	"SellConfirm",
+	{
+		Basket = {
+			["Volcanic Rock"] = 1,
+            ["Lapis Lazuli"] = 1, ["Sand Stone"] = 1,
+		}
+	}
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DialogueService"):WaitForChild("RF"):WaitForChild("RunCommand"):InvokeServer(unpack(args))
+   -- The function that takes place when the button is pressed
+   end,
+})
+
+
+
+
+
+
+
+
+
+
+
+
+--[[
+    This script manages two completely separate auto-action loops:
+    1. Auto Mine (Pickaxe)
+    2. Auto Swing (Weapon)
+
+    Each feature has its own set of variables and control functions 
+    to prevent conflicts.
+]]--
+
+-- =========================================================================
+-- SERVICES & GLOBAL CONFIG
+-- =========================================================================
+local ACTIVATION_RATE = 0.1
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local ToolActivatedRF = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ToolService"):WaitForChild("RF"):WaitForChild("ToolActivated")
+
+
+-- #########################################################################
+-- 1. AUTO MINE SYSTEM (PICKAXE)
+-- #########################################################################
+
+local isMineToggled = false
+local mineArgs = { "Pickaxe" }
+
+local function startAutoMineLoop()
+    spawn(function()
+        -- Loop uses its own unique state variable: isMineToggled
+        while isMineToggled do
+            local success, result = pcall(ToolActivatedRF.InvokeServer, ToolActivatedRF, unpack(mineArgs))
+            if not success then
+                warn("AutoMine InvokeServer failed:", result)
+            end
+            wait(ACTIVATION_RATE)
+        end
+    end)
+end
+
+-- Unified Mine Control Function
+local function toggleAutoMine(newValue)
+    isMineToggled = newValue
+    if isMineToggled then
+        startAutoMineLoop()
+    end
+end
+
+-- GUI & Keybind for Auto Mine
+local ToggleMine = Tab:CreateToggle({
+    Name = "Auto Mine (Pickaxe)",
+    CurrentValue = false,
+    Flag = "Toggle2", 
+    Callback = function(Value)
+        toggleAutoMine(Value) 
+    end,
+})
+
+local KeybindMine = Tab:CreateKeybind({
+    Name = "Auto Mine Keybind",
+    CurrentKeybind = "C",
+    HoldToInteract = false,
+    Flag = "Toggle2", 
+    Callback = function(KeybindHeld)
+        local newValue = not isMineToggled -- Flips the Mine state
+        toggleAutoMine(newValue)
+    end,
+})
+
+
+-- #########################################################################
+-- 2. AUTO SWING SYSTEM (WEAPON)
+-- #########################################################################
+
+local isSwingToggled = false
+local swingArgs = { "Weapon" } -- Assuming the weapon argument is "Weapon" or similar
+
+local function startAutoSwingLoop()
+    spawn(function()
+        -- Loop uses its own unique state variable: isSwingToggled
+        while isSwingToggled do
+            local success, result = pcall(ToolActivatedRF.InvokeServer, ToolActivatedRF, unpack(swingArgs))
+            if not success then
+                warn("AutoSwing InvokeServer failed:", result)
+            end
+            wait(ACTIVATION_RATE)
+        end
+    end)
+end
+
+-- Unified Swing Control Function
+local function toggleAutoSwing(newValue)
+    isSwingToggled = newValue
+    if isSwingToggled then
+        startAutoSwingLoop()
+    end
+end
+
+-- GUI & Keybind for Auto Swing
+local ToggleSwing = Tab:CreateToggle({
+    Name = "Auto Swing (Weapon)",
+    CurrentValue = false,
+    Flag = "Toggle3",
+    Callback = function(Value)
+        toggleAutoSwing(Value) 
+    end,
+})
+
+local KeybindSwing = Tab:CreateKeybind({
+    Name = "Auto Swing Keybind",
+    CurrentKeybind = "V",
+    HoldToInteract = false,
+    Flag = "Toggle3", 
+    Callback = function(KeybindHeld)
+        local newValue = not isSwingToggled -- Flips the Swing state
+        toggleAutoSwing(newValue)
+    end,
+})
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+-- #########################################################################
+-- 3. AUTO SELL SYSTEM (DIALOGUE COMMAND)
+-- #########################################################################
+
+-- Note: We use a different RemoteFunction here (RunCommand)
+local RunCommandRF = ReplicatedStorage:WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("DialogueService"):WaitForChild("RF"):WaitForChild("RunCommand")
+
+-- State and Arguments for the Auto Sell feature
+local isSellToggled = false
+local SELL_RATE = 5 -- Time in seconds between sales (Selling is less frequent than swinging)
+
+-- Combining the two sell commands into a list of payloads
+local sellPayloads = {
+    -- Payload 1: Common Ores
+    {
+        "SellConfirm",
+        { Basket = { Tin = 1, Mushroomite =1, Gold = 1, Cobalt = 1, Titanium = 1, Quartz = 1, Amethyst = 1, Topaz = 1, Diamond = 1, Sapphire = 1, Cuprite = 1, Platinum = 1, Silver = 1, Stone = 1, Copper = 1, Iron = 1, Tin = 1, Bananite = 1, Cardboardite = 1, Aite = 1, Poopite = 1  } }
+    },
+    -- Payload 2: Special Ores
+    {
+        "SellConfirm",
+        { Basket = { ["Volcanic Rock"] = 1, ["Lapis Lazuli"] = 1, ["Sand Stone"] = 1, } }
+    }
+}
+
+local function startAutoSellLoop()
+    spawn(function()
+        -- Loop uses its own unique state variable: isSellToggled
+        while isSellToggled do
+            -- Fire both sell commands sequentially
+            for _, args in ipairs(sellPayloads) do
+                local success, result = pcall(RunCommandRF.InvokeServer, RunCommandRF, unpack(args))
+                if not success then
+                    warn("AutoSell InvokeServer failed:", result)
+                end
+            end
+            
+            -- Wait for the configured sell rate before trying again
+            wait(SELL_RATE)
+        end
+    end)
+end
+
+-- Unified Sell Control Function
+local function toggleAutoSell(newValue)
+    isSellToggled = newValue
+    if isSellToggled then
+        startAutoSellLoop()
+    end
+end
+
+
+
+-- #########################################################################
+-- 3. AUTO SELL GUI & KEYBIND
+-- #########################################################################
+
+local ToggleSell = Tab:CreateToggle({
+    Name = "Auto Sell",
+    CurrentValue = false,
+    Flag = "Toggle4", -- Must be a new, unique flag
+    Callback = function(Value)
+        toggleAutoSell(Value) 
+    end,
+})
+
+local KeybindSell = Tab:CreateKeybind({
+    Name = "Auto Sell Keybind",
+    CurrentKeybind = "Z", -- Suggested keybind (you can change this)
+    HoldToInteract = false,
+    Flag = "Toggle4", 
+    Callback = function(KeybindHeld)
+        local newValue = not isSellToggled -- Flips the Sell state
+        toggleAutoSell(newValue)
+    end,
+})
+
+
+
+
+
+
+local Button = Tab:CreateButton({
+   Name = "Open Forge",
+   Callback = function()
+local args = {
+	workspace:WaitForChild("Proximity"):WaitForChild("Forge")
+}
+game:GetService("ReplicatedStorage"):WaitForChild("Shared"):WaitForChild("Packages"):WaitForChild("Knit"):WaitForChild("Services"):WaitForChild("ProximityService"):WaitForChild("RF"):WaitForChild("Forge"):InvokeServer(unpack(args))
+end,}
+)
