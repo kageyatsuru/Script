@@ -230,12 +230,50 @@ local sellPayloads = {
     -- Payload 1: Common Ores
     {
         "SellConfirm",
-        { Basket = { Tin = 1, Mushroomite =1, Gold = 1, Cobalt = 1, Titanium = 1, Quartz = 1, Amethyst = 1, Topaz = 1, Diamond = 1, Sapphire = 1, Cuprite = 1, Platinum = 1, Silver = 1, Stone = 1, Copper = 1, Iron = 1, Tin = 1, Bananite = 1, Cardboardite = 1, Aite = 1, Poopite = 1  } }
+        { Basket = {             --island 1 Common
+            Stone = 1, 
+             Copper = 1, 
+             Iron = 1, 
+             Cardboardite = 1, 
+             --island 1 Uncommon
+             Tin = 1, 
+             Silver = 1, 
+             Bananite = 1, 
+             Gold = 1, 
+             --island 1 Rare
+             Mushroomite =1, 
+             Platinum = 1, 
+             --island 1 Epic
+             Aite = 1, 
+             Poopite = 1 
+             
+
+
+             --island 2 uncommon
+             Cobalt = 1, 
+             Titanium = 1, 
+             --island 2 Rare
+             Quartz = 1, 
+             Amethyst = 1, 
+             Topaz = 1, 
+             Diamond = 1, 
+             Sapphire = 1, 
+             --island 2 Epic
+             Cuprite = 1, 
+             Obsidian = 0,
+             Emerald = 1,
+             Ruby = 1,
+             Rivalite = 0, } }
     },
     -- Payload 2: Special Ores
     {
         "SellConfirm",
-        { Basket = { ["Volcanic Rock"] = 1, ["Lapis Lazuli"] = 1, ["Sand Stone"] = 1, } }
+        { Basket = { --island 1 Common
+            ["Sand Stone"] = 1,
+            --island 2 Uncommon
+            ["Lapis Lazuli"] = 1,
+            --island 2 Rare
+            ["Volcanic Rock"] = 1,  } }
     }
 }
 
