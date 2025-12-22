@@ -1,0 +1,171 @@
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+-- CONTROL VARIABLES
+local isEnabled = false 
+local isFiringManually = false
+local weapon = "ak47"
+local dragging = false
+local mousePos, framePos
+local AIM_SMOOTHNESS = 0.15 -- 0.1 for smooth, 1.0 for instant snap
+
+-- WEAPON COLLECTION
+local weapons = {}
+for _, v in pairs(replicatedStorage.Prefabs.Items:GetChildren()) do
+    if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") then
+        table.insert(weapons, v.Name)
+    end
+end
+table.sort(weapons)
+
+-- UI SETUP
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileAimbotFinal"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local container = Instance.new("Frame")
+container.Size = UDim2.new(0, 125, 0, 50)
+container.Position = UDim2.new(0.95, -125, 0.4, 0) 
+container.BackgroundTransparency = 1
+container.Parent = screenGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "OFF"
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Parent = container
+Instance.new("UICorner", toggleBtn)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 125, 0, 50)
+mainFrame.Position = UDim2.new(0, 55, 0, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.Parent = container
+Instance.new("UICorner", mainFrame)
+
+local expandButton = Instance.new("TextButton")
+expandButton.Size = UDim2.new(1, 0, 1, 0)
+expandButton.Text = "Weapon: " .. weapon
+expandButton.Font = Enum.Font.SourceSansBold
+expandButton.TextColor3 = Color3.new(1, 1, 1)
+expandButton.BackgroundTransparency = 1
+expandButton.Parent = mainFrame
+
+local weaponsFrame = Instance.new("ScrollingFrame")
+weaponsFrame.Size = UDim2.new(1, 0, 0, 200)
+weaponsFrame.Position = UDim2.new(0, 0, 1, 5)
+weaponsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+weaponsFrame.Visible = false
+weaponsFrame.Parent = mainFrame
+Instance.new("UICorner", weaponsFrame)
+
+local layout = Instance.new("UIListLayout")
+layout.Parent = weaponsFrame
+layout.Padding = UDim.new(0, 4)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+for _, weaponname in ipairs(weapons) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Text = weaponname
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Parent = weaponsFrame
+    Instance.new("UICorner", btn)
+
+    btn.MouseButton1Click:Connect(function()
+        weapon = weaponname
+        expandButton.Text = "Weapon: " .. weapon
+        weaponsFrame.Visible = false
+    end)
+end
+weaponsFrame.CanvasSize = UDim2.new(0, 0, 0, #weapons * 34)
+
+-- TOGGLE LOGIC
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+expandButton.MouseButton1Click:Connect(function()
+    weaponsFrame.Visible = not weaponsFrame.Visible
+end)
+
+-- DRAGGING LOGIC
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = true
+        mousePos = input.Position
+        framePos = container.Position
+    end
+end)
+
+uis.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        dragging = false
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        local delta = input.Position - mousePos
+        container.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
+    end
+end)
+
+-- DETECT MANUAL FIRING
+uis.InputBegan:Connect(function(input, processed)
+    -- We don't check for 'processed' because we want to catch clicks on the game's shoot button
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isFiringManually = true
+    end
+end)
+
+uis.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        isFiringManually = false
+    end
+end)
+
+-- MAIN AIM ASSIST LOOP
+runService.RenderStepped:Connect(function()
+    if not isEnabled or not isFiringManually then return end
+    
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    local closestTarget = nil
+    local shortestDist = 600
+
+    -- Only look for entities that have a Head and are alive
+    local entities = workspace:FindFirstChild("Entity")
+    if not entities then return end
+
+    for _, v in pairs(entities:GetChildren()) do
+        if v:FindFirstChild("Head") and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
+            -- Only target if the zombie is on screen
+            local _, onScreen = camera:WorldToViewportPoint(v.Head.Position)
+            
+            if onScreen then
+                local dist = (char.HumanoidRootPart.Position - v.Head.Position).Magnitude
+                if dist < shortestDist then
+                    closestTarget = v
+                    shortestDist = dist
+                end
+            end
+        end
+    end
+
+    -- Camera Snap Logic
+    if closestTarget then
+        local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Head.Position)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, AIM_SMOOTHNESS)
+    end
+end)
