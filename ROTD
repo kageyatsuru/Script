@@ -6,11 +6,11 @@ local camera = workspace.CurrentCamera
 
 -- CONTROL VARIABLES
 local isEnabled = false 
-local isFiringManually = false
 local weapon = "ak47"
 local dragging = false
 local mousePos, framePos
-local AIM_SMOOTHNESS = 0.25 -- 0.1 = slow/smooth, 1.0 = instant lock
+local AIM_SMOOTHNESS = 0.2 -- How fast it follows (0.1 to 1)
+local TARGET_RANGE = 600   -- Max studs away to target
 
 -- WEAPON COLLECTION
 local weapons = {}
@@ -26,7 +26,7 @@ table.sort(weapons)
 
 -- UI SETUP
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileAimbotPro"
+screenGui.Name = "AutoLockMobile"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
@@ -60,47 +60,14 @@ expandButton.TextColor3 = Color3.new(1, 1, 1)
 expandButton.BackgroundTransparency = 1
 expandButton.Parent = mainFrame
 
-local weaponsFrame = Instance.new("ScrollingFrame")
-weaponsFrame.Size = UDim2.new(1, 0, 0, 200)
-weaponsFrame.Position = UDim2.new(0, 0, 1, 5)
-weaponsFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-weaponsFrame.Visible = false
-weaponsFrame.Parent = mainFrame
-Instance.new("UICorner", weaponsFrame)
-
-local layout = Instance.new("UIListLayout")
-layout.Parent = weaponsFrame
-layout.Padding = UDim.new(0, 4)
-layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-for _, weaponname in ipairs(weapons) do
-    local btn = Instance.new("TextButton")
-    btn.Size = UDim2.new(0.9, 0, 0, 30)
-    btn.Text = weaponname
-    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
-    btn.TextColor3 = Color3.new(1,1,1)
-    btn.Parent = weaponsFrame
-    Instance.new("UICorner", btn)
-
-    btn.MouseButton1Click:Connect(function()
-        weapon = weaponname
-        expandButton.Text = "Weapon: " .. weapon
-        weaponsFrame.Visible = false
-    end)
-end
-weaponsFrame.CanvasSize = UDim2.new(0, 0, 0, #weapons * 34)
-
--- UI TOGGLE & DRAG
+-- UI LOGIC
 toggleBtn.MouseButton1Click:Connect(function()
     isEnabled = not isEnabled
     toggleBtn.Text = isEnabled and "ON" or "OFF"
     toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
-expandButton.MouseButton1Click:Connect(function()
-    weaponsFrame.Visible = not weaponsFrame.Visible
-end)
-
+-- DRAGGING LOGIC
 toggleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
@@ -122,28 +89,32 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
--- INPUT DETECTION
-uis.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isFiringManually = true
-    end
-end)
+-- VISIBILITY CHECK FUNCTION
+local function isVisible(targetPart)
+    local character = player.Character
+    if not character then return false end
+    
+    local params = RaycastParams.new()
+    params.FilterType = Enum.RaycastFilterType.Exclude
+    params.FilterDescendantsInstances = {character, screenGui}
+    
+    local origin = camera.CFrame.Position
+    local direction = (targetPart.Position - origin).Unit * (targetPart.Position - origin).Magnitude
+    local result = workspace:Raycast(origin, direction, params)
+    
+    -- Returns true if the ray hits the target directly without hitting a wall first
+    return result == nil or result.Instance:IsDescendantOf(targetPart.Parent)
+end
 
-uis.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        isFiringManually = false
-    end
-end)
-
--- FINAL AIM LOOP
+-- AUTO-LOCK LOOP
 runService.RenderStepped:Connect(function()
-    if not isEnabled or not isFiringManually then return end
+    if not isEnabled then return end
     
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
     local closestTarget = nil
-    local shortestMouseDist = 1000 -- Max pixels from center screen
+    local shortestMouseDist = 1000 
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
     local entityFolder = workspace:FindFirstChild("Entity")
@@ -151,11 +122,11 @@ runService.RenderStepped:Connect(function()
         for _, v in pairs(entityFolder:GetChildren()) do
             local head = v:FindFirstChild("Head")
             if head then
-                -- Check screen position
                 local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                local distFromChar = (char.HumanoidRootPart.Position - head.Position).Magnitude
                 
-                if onScreen then
-                    -- Compare distance to the crosshair (center)
+                -- Must be on screen, within range, and visible (not behind a wall)
+                if onScreen and distFromChar < TARGET_RANGE and isVisible(head) then
                     local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
                     
                     if mouseDist < shortestMouseDist then
@@ -167,7 +138,7 @@ runService.RenderStepped:Connect(function()
         end
     end
 
-    -- Camera Rotation
+    -- Persistent Camera Lock
     if closestTarget then
         local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
         camera.CFrame = camera.CFrame:Lerp(targetCFrame, AIM_SMOOTHNESS)
