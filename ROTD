@@ -9,7 +9,7 @@ local cd = 0
 local weapon = "ak47"
 local FIRE_RATE = 0.1 
 local dragging = false
-local mousePos, framePos
+local dragInput, dragStart, startPos
 
 -- DISTANCE VARIABLES (SNAPPING)
 local maxDistance = 600 
@@ -31,12 +31,12 @@ table.sort(weapons)
 
 -- UI SETUP
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileSilentAim_Clean"
+screenGui.Name = "MobileSilentAim_V3"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
 local container = Instance.new("Frame")
-container.Size = UDim2.new(0, 125, 0, 50) -- Starts small
+container.Size = UDim2.new(0, 125, 0, 50)
 container.Position = UDim2.new(0.95, -125, 0.4, 0) 
 container.BackgroundTransparency = 1
 container.Parent = screenGui
@@ -54,7 +54,6 @@ local mainFrame = Instance.new("Frame")
 mainFrame.Size = UDim2.new(0, 125, 0, 50)
 mainFrame.Position = UDim2.new(0, 55, 0, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
-mainFrame.ClipsDescendants = false
 mainFrame.Parent = container
 Instance.new("UICorner", mainFrame)
 
@@ -66,9 +65,9 @@ expandButton.TextColor3 = Color3.new(1, 1, 1)
 expandButton.BackgroundTransparency = 1
 expandButton.Parent = mainFrame
 
--- HIDDEN SLIDER CONTAINER
+-- SLIDER & LIST MENU
 local extraMenu = Instance.new("Frame")
-extraMenu.Size = UDim2.new(1, 0, 0, 240) -- Height for slider + scrolling list
+extraMenu.Size = UDim2.new(1, 0, 0, 240)
 extraMenu.Position = UDim2.new(0, 0, 1, 5)
 extraMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 extraMenu.Visible = false
@@ -77,7 +76,6 @@ Instance.new("UICorner", extraMenu)
 
 local sliderLabel = Instance.new("TextLabel")
 sliderLabel.Size = UDim2.new(1, 0, 0, 25)
-sliderLabel.Position = UDim2.new(0, 0, 0, 5)
 sliderLabel.Text = "Range: " .. maxDistance
 sliderLabel.TextColor3 = Color3.new(1, 1, 1)
 sliderLabel.BackgroundTransparency = 1
@@ -93,15 +91,12 @@ sliderBar.Parent = extraMenu
 local sliderFill = Instance.new("Frame")
 sliderFill.Size = UDim2.new((maxDistance - MIN_DIST) / (MAX_DIST - MIN_DIST), 0, 1, 0)
 sliderFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-sliderFill.BorderSizePixel = 0
 sliderFill.Parent = sliderBar
 
--- WEAPON LIST (Now inside extraMenu)
 local weaponsFrame = Instance.new("ScrollingFrame")
 weaponsFrame.Size = UDim2.new(1, 0, 0, 180)
 weaponsFrame.Position = UDim2.new(0, 0, 0, 50)
 weaponsFrame.BackgroundTransparency = 1
-weaponsFrame.ScrollBarThickness = 4
 weaponsFrame.Parent = extraMenu
 
 local layout = Instance.new("UIListLayout")
@@ -117,14 +112,34 @@ for _, weaponname in ipairs(weapons) do
     btn.TextColor3 = Color3.new(1,1,1)
     btn.Parent = weaponsFrame
     Instance.new("UICorner", btn)
-
     btn.MouseButton1Click:Connect(function()
         weapon = weaponname
         expandButton.Text = "Weapon: " .. weapon
         extraMenu.Visible = false
     end)
 end
-weaponsFrame.CanvasSize = UDim2.new(0, 0, 0, #weapons * 34)
+
+-- FIXED DRAGGING LOGIC (Restricted to toggleBtn grab)
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = container.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        container.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
 
 -- SLIDER LOGIC
 local function updateSlider(input)
@@ -142,60 +157,26 @@ sliderBar.InputBegan:Connect(function(input)
         updateSlider(input)
     end
 end)
+uis.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then sliderActive = false end end)
+uis.InputChanged:Connect(function(input) if sliderActive and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then updateSlider(input) end end)
 
-uis.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then sliderActive = false end
-end)
-
-uis.InputChanged:Connect(function(input)
-    if sliderActive and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-        updateSlider(input)
-    end
-end)
-
--- TOGGLE LOGIC
 toggleBtn.MouseButton1Click:Connect(function()
     isEnabled = not isEnabled
     toggleBtn.Text = isEnabled and "ON" or "OFF"
     toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
-expandButton.MouseButton1Click:Connect(function()
-    extraMenu.Visible = not extraMenu.Visible
-end)
-
--- DRAGGING
-toggleBtn.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
-        dragging = true
-        mousePos = input.Position
-        framePos = container.Position
-    end
-end)
-
-uis.InputEnded:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then dragging = false end
-end)
-
-uis.InputChanged:Connect(function(input)
-    if dragging and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
-        local delta = input.Position - mousePos
-        container.Position = UDim2.new(framePos.X.Scale, framePos.X.Offset + delta.X, framePos.Y.Scale, framePos.Y.Offset + delta.Y)
-    end
-end)
+expandButton.MouseButton1Click:Connect(function() extraMenu.Visible = not extraMenu.Visible end)
 
 -- SILENT AIM LOOP
 runService.RenderStepped:Connect(function(delta)
     if not isEnabled then return end
-    
     cd = math.max(0, cd - delta)
     local char = player.Character
     if not char or not char:FindFirstChild(weapon) then return end
-    
     if cd <= 0 then
         local entities = workspace:FindFirstChild("Entity")
         if not entities then return end
-
         for _, v in pairs(entities:GetChildren()) do
             if v:FindFirstChild("Head") and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
                 local dist = (char.HumanoidRootPart.Position - v.Head.Position).Magnitude
