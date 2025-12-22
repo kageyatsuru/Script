@@ -1,4 +1,3 @@
-local game = game
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
@@ -11,6 +10,12 @@ local weapon = "ak47"
 local FIRE_RATE = 0.1 
 local dragging = false
 local mousePos, framePos
+
+-- DISTANCE VARIABLES (SNAPPING)
+local maxDistance = 600 
+local MIN_DIST = 50
+local MAX_DIST = 1000
+local STEP = 50 -- This is the increment value
 
 -- WEAPON COLLECTION
 local weapons = {}
@@ -27,43 +32,99 @@ screenGui.Name = "MobileAimbotRight"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
--- Main Container (Positioned on the RIGHT)
 local container = Instance.new("Frame")
-container.Size = UDim2.new(0, 125, 0, 50)
--- 0.95 Scale X puts it on the right side
+container.Size = UDim2.new(0, 125, 0, 85)
 container.Position = UDim2.new(0.95, -100, 0.4, 0) 
 container.BackgroundTransparency = 1
 container.Parent = screenGui
 
--- THE TOGGLE BUTTON
 local toggleBtn = Instance.new("TextButton")
 toggleBtn.Size = UDim2.new(0, 50, 0, 50)
-toggleBtn.Position = UDim2.new(0, 0, 0, 0)
 toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
 toggleBtn.Text = "OFF"
 toggleBtn.Font = Enum.Font.SourceSansBold
 toggleBtn.TextColor3 = Color3.new(1,1,1)
 toggleBtn.Parent = container
 Instance.new("UICorner", toggleBtn)
-local stroke = Instance.new("UIStroke", toggleBtn)
-stroke.Thickness = 2
-stroke.ApplyStrokeMode = Enum.ApplyStrokeMode.Border
 
--- MAIN MENU FRAME
 local mainFrame = Instance.new("Frame")
-mainFrame.Size = UDim2.new(0, 125, 0, 50)
+mainFrame.Size = UDim2.new(0, 125, 0, 85)
 mainFrame.Position = UDim2.new(0, 55, 0, 0)
 mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
 mainFrame.Parent = container
 Instance.new("UICorner", mainFrame)
 
 local expandButton = Instance.new("TextButton")
-expandButton.Size = UDim2.new(1, 0, 1, 0)
+expandButton.Size = UDim2.new(1, 0, 0, 40)
 expandButton.Text = "Weapon: " .. weapon
 expandButton.Font = Enum.Font.SourceSansBold
 expandButton.TextColor3 = Color3.new(1, 1, 1)
 expandButton.BackgroundTransparency = 1
 expandButton.Parent = mainFrame
+
+--- SLIDER UI ---
+local sliderFrame = Instance.new("Frame")
+sliderFrame.Size = UDim2.new(0.9, 0, 0, 30)
+sliderFrame.Position = UDim2.new(0.05, 0, 0, 45)
+sliderFrame.BackgroundTransparency = 1
+sliderFrame.Parent = mainFrame
+
+local sliderLabel = Instance.new("TextLabel")
+sliderLabel.Size = UDim2.new(1, 0, 0, 15)
+sliderLabel.Text = "Range: " .. maxDistance
+sliderLabel.TextColor3 = Color3.new(1, 1, 1)
+sliderLabel.BackgroundTransparency = 1
+sliderLabel.Font = Enum.Font.SourceSansBold
+sliderLabel.TextSize = 12
+sliderLabel.Parent = sliderFrame
+
+local sliderBar = Instance.new("Frame")
+sliderBar.Size = UDim2.new(1, 0, 0, 4)
+sliderBar.Position = UDim2.new(0, 0, 0.7, 0)
+sliderBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+sliderBar.Parent = sliderFrame
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new((maxDistance - MIN_DIST) / (MAX_DIST - MIN_DIST), 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+sliderFill.BorderSizePixel = 0
+sliderFill.Parent = sliderBar
+
+-- UPDATED SLIDER LOGIC (WITH SNAPPING)
+local function updateSlider(input)
+    local relativeX = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+    
+    -- Calculate raw value
+    local rawValue = MIN_DIST + (relativeX * (MAX_DIST - MIN_DIST))
+    
+    -- Snap to nearest 50
+    maxDistance = math.floor((rawValue / STEP) + 0.5) * STEP
+    
+    -- Update UI
+    sliderLabel.Text = "Range: " .. maxDistance
+    local visualRatio = (maxDistance - MIN_DIST) / (MAX_DIST - MIN_DIST)
+    sliderFill.Size = UDim2.new(visualRatio, 0, 1, 0)
+end
+
+local sliderActive = false
+sliderBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderActive = true
+        updateSlider(input)
+    end
+end)
+
+uis.InputEnded:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderActive = false
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if sliderActive and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then
+        updateSlider(input)
+    end
+end)
 
 -- WEAPON LIST
 local weaponsFrame = Instance.new("ScrollingFrame")
@@ -91,12 +152,11 @@ for _, weaponname in ipairs(weapons) do
     btn.MouseButton1Click:Connect(function()
         weapon = weaponname
         expandButton.Text = "Weapon: " .. weapon
-        weaponsFrame.Visible = false -- QOL: Auto-close after picking
+        weaponsFrame.Visible = false
     end)
 end
-weaponsFrame.CanvasSize = UDim2.new(0, 0, 0, #weapons * 34)
 
--- TOGGLE LOGIC
+-- TOGGLE & DRAG
 toggleBtn.MouseButton1Click:Connect(function()
     isEnabled = not isEnabled
     toggleBtn.Text = isEnabled and "ON" or "OFF"
@@ -107,15 +167,11 @@ expandButton.MouseButton1Click:Connect(function()
     weaponsFrame.Visible = not weaponsFrame.Visible
 end)
 
--- DRAGGING
 toggleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         dragging = true
         mousePos = input.Position
         framePos = container.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragging = false end
-        end)
     end
 end)
 
@@ -138,7 +194,7 @@ runService.RenderStepped:Connect(function(delta)
         for _, v in pairs(workspace.Entity:GetChildren()) do
             if v:FindFirstChild("Head") and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
                 local dist = (char.HumanoidRootPart.Position - v.Head.Position).Magnitude
-                if dist < 600 then
+                if dist < maxDistance then
                     replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer(
                         "#1", char[weapon], 
                         {
