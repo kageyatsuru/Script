@@ -10,7 +10,7 @@ local isFiringManually = false
 local weapon = "ak47"
 local dragging = false
 local mousePos, framePos
-local AIM_SMOOTHNESS = 0.2 -- Increase this if it feels too slow (e.g., 0.5)
+local AIM_SMOOTHNESS = 0.25 -- 0.1 = slow/smooth, 1.0 = instant lock
 
 -- WEAPON COLLECTION
 local weapons = {}
@@ -26,7 +26,7 @@ table.sort(weapons)
 
 -- UI SETUP
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "MobileAimbotFixed"
+screenGui.Name = "MobileAimbotPro"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
@@ -90,7 +90,7 @@ for _, weaponname in ipairs(weapons) do
 end
 weaponsFrame.CanvasSize = UDim2.new(0, 0, 0, #weapons * 34)
 
--- TOGGLE & DRAG
+-- UI TOGGLE & DRAG
 toggleBtn.MouseButton1Click:Connect(function()
     isEnabled = not isEnabled
     toggleBtn.Text = isEnabled and "ON" or "OFF"
@@ -122,7 +122,7 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
--- DETECT MANUAL FIRING
+-- INPUT DETECTION
 uis.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
         isFiringManually = true
@@ -135,7 +135,7 @@ uis.InputEnded:Connect(function(input)
     end
 end)
 
--- AIM ASSIST LOOP (TARGETING WORKSPACE.ENTITY)
+-- FINAL AIM LOOP
 runService.RenderStepped:Connect(function()
     if not isEnabled or not isFiringManually then return end
     
@@ -143,29 +143,31 @@ runService.RenderStepped:Connect(function()
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
     local closestTarget = nil
-    local shortestDist = 600
+    local shortestMouseDist = 1000 -- Max pixels from center screen
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
 
-    -- Look inside Workspace.Entity
     local entityFolder = workspace:FindFirstChild("Entity")
     if entityFolder then
         for _, v in pairs(entityFolder:GetChildren()) do
-            -- Look for a Head part
             local head = v:FindFirstChild("Head")
             if head then
-                -- Optional: Check for Health if they have a Humanoid
-                local hum = v:FindFirstChildOfClass("Humanoid")
-                if (hum and hum.Health > 0) or (not hum) then
-                    local dist = (char.HumanoidRootPart.Position - head.Position).Magnitude
-                    if dist < shortestDist then
+                -- Check screen position
+                local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
+                
+                if onScreen then
+                    -- Compare distance to the crosshair (center)
+                    local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                    
+                    if mouseDist < shortestMouseDist then
                         closestTarget = head
-                        shortestDist = dist
+                        shortestMouseDist = mouseDist
                     end
                 end
             end
         end
     end
 
-    -- Perform Camera Snap
+    -- Camera Rotation
     if closestTarget then
         local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
         camera.CFrame = camera.CFrame:Lerp(targetCFrame, AIM_SMOOTHNESS)
