@@ -208,13 +208,20 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
--- [[ AIMBOT CORE LOOP ]]
+-- [[ UPDATED AIMBOT CORE LOOP WITH FOCUS FIX ]]
 runService.RenderStepped:Connect(function()
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     fovCircle.Position = screenCenter
     fovCircle.Radius = fovRadius
     
-    if not isEnabled then return end
+    if not isEnabled then 
+        -- Ensure mouse behavior returns to normal when OFF
+        uis.MouseBehavior = Enum.MouseBehavior.Default
+        return 
+    end
+    
+    -- Force mouse to center to help Hitscan weapons align with camera
+    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
     
     local char = player.Character
     local root = char and char:FindFirstChild("HumanoidRootPart")
@@ -255,7 +262,13 @@ runService.RenderStepped:Connect(function()
     end
 
     if closestTarget then
+        -- THE FIX: Calculate target rotation
         local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
+        
+        -- Smoothly move the camera (Smoothing 0.5)
         camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothing)
+        
+        -- Update Camera Focus so the gun's "Raycast" follows the visual camera
+        camera.Focus = closestTarget.CFrame
     end
 end)
