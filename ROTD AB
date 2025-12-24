@@ -1,1 +1,177 @@
+-- [[ PRECISION V10.2 MOBILE - FINALIZED VERSION ]]
+
+local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+-- SETTINGS
+local isEnabled = false 
+local targetBone = "Head" 
+local smoothing = 0.5 
+local maxDistance = 600 
+local fovRadius = 150 
+
+-- BOUNDARIES
+local MIN_DIST, MAX_DIST = 50, 1500
+local MIN_FOV, MAX_FOV = 50, 800
+
+-- FOV CIRCLE
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 2
+fovCircle.Color = Color3.fromRGB(0, 255, 150)
+fovCircle.Transparency = 0.5
+fovCircle.Visible = false
+
+-- [[ MOBILE UI SETUP ]]
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "MobileAimbotUI_V10_2"
+screenGui.ResetOnSpawn = false
+screenGui.IgnoreGuiInset = true
+
+-- MINIMIZE BUTTON (Top-Right)
+local minBtn = Instance.new("TextButton", screenGui)
+minBtn.Size = UDim2.new(0, 60, 0, 60)
+minBtn.Position = UDim2.new(0.98, -60, 0.05, 0)
+minBtn.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+minBtn.Text = "MENU"
+minBtn.TextColor3 = Color3.new(1,1,1)
+minBtn.Font = Enum.Font.GothamBold
+minBtn.TextSize = 14
+Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 12)
+
+-- MAIN MENU FRAME
+local mainFrame = Instance.new("Frame", screenGui)
+mainFrame.Size = UDim2.new(0, 260, 0, 320)
+mainFrame.Position = UDim2.new(0.5, -130, 0.25, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+mainFrame.BorderSizePixel = 0
+mainFrame.Active = true
+mainFrame.Draggable = true 
+mainFrame.Visible = true
+Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 15)
+
+minBtn.MouseButton1Click:Connect(function()
+    mainFrame.Visible = not mainFrame.Visible
+end)
+
+-- LARGE MASTER TOGGLE
+local toggleBtn = Instance.new("TextButton", mainFrame)
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 65)
+toggleBtn.Position = UDim2.new(0.05, 0, 0, 15)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "AIM: OFF"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 22
+Instance.new("UICorner", toggleBtn)
+
+-- BONE SELECTOR
+local boneBtn = Instance.new("TextButton", mainFrame)
+boneBtn.Size = UDim2.new(0.9, 0, 0, 45)
+boneBtn.Position = UDim2.new(0.05, 0, 0, 90)
+boneBtn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+boneBtn.Text = "TARGET: HEAD"
+boneBtn.TextColor3 = Color3.new(1,1,1)
+boneBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", boneBtn)
+
+-- BIG SLIDER BUILDER
+local function createBigSlider(name, startVal, pos, min, max, callback)
+    local label = Instance.new("TextLabel", mainFrame)
+    label.Size = UDim2.new(1, 0, 0, 35)
+    label.Position = UDim2.new(0, 0, 0, pos)
+    label.Text = name .. ": " .. startVal
+    label.TextColor3 = Color3.new(1,1,1)
+    label.BackgroundTransparency = 1
+    label.Font = Enum.Font.GothamBold
+    label.TextSize = 16
+    
+    local bar = Instance.new("Frame", mainFrame)
+    bar.Size = UDim2.new(0.85, 0, 0, 22) -- Massive thick slider bar
+    bar.Position = UDim2.new(0.075, 0, 0, pos + 35)
+    bar.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+    Instance.new("UICorner", bar)
+    
+    local fill = Instance.new("Frame", bar)
+    fill.Size = UDim2.new((startVal - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 255, 120)
+    Instance.new("UICorner", fill)
+    
+    -- Mobile Touch Support for Sliders
+    local function update()
+        local touchPos = uis:GetMouseLocation().X
+        local relative = math.clamp((touchPos - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+        local val = math.floor(min + (relative * (max - min)))
+        fill.Size = UDim2.new(relative, 0, 1, 0)
+        label.Text = name .. ": " .. val
+        callback(val)
+    end
+
+    bar.InputBegan:Connect(function(input)
+        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+            local moveConn
+            moveConn = runService.RenderStepped:Connect(update)
+            input.Changed:Connect(function()
+                if input.UserInputState == Enum.UserInputState.End then
+                    if moveConn then moveConn:Disconnect() end
+                end
+            end)
+        end
+    end)
+end
+
+createBigSlider("Distance", maxDistance, 150, MIN_DIST, MAX_DIST, function(v) maxDistance = v end)
+createBigSlider("FOV Size", fovRadius, 230, MIN_FOV, MAX_FOV, function(v) fovRadius = v end)
+
+-- UI ACTIONS
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "AIM: ON" or "AIM: OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    fovCircle.Visible = isEnabled
+end)
+
+boneBtn.MouseButton1Click:Connect(function()
+    targetBone = (targetBone == "Head") and "Torso" or "Head"
+    boneBtn.Text = "TARGET: " .. targetBone
+end)
+
+-- AIMBOT ENGINE
+runService.RenderStepped:Connect(function()
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Position, fovCircle.Radius = center, fovRadius
+    
+    if not isEnabled then return end
+    
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    local closest, minScore = nil, fovRadius
+    local entities = workspace:FindFirstChild("Entity")
+    
+    if entities then
+        for _, v in ipairs(entities:GetChildren()) do
+            local t = (targetBone == "Head") and v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
+            local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            
+            if t and h and h.Health > 0 then
+                local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
+                if dist < maxDistance then
+                    local pos, onScreen = camera:WorldToViewportPoint(t.Position)
+                    if onScreen then
+                        local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                        if mDist < minScore then
+                            minScore, closest = mDist, t
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if closest then
+        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
+    end
+end)
 
