@@ -188,7 +188,7 @@ runService.RenderStepped:Connect(function(delta)
                             ["Direction"] = (v.Head.Position - char.HumanoidRootPart.Position).Unit, 
                             ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
                             ["TracerColor"] = Color3.new(1, 1, 1), 
-                            ["ShotId"] = 1, 
+                            ["ShotId"] = 322, 
                             ["HitInfoList"] = {{["Part"] = v.Head, ["Position"] = v.Head.Position, ["Normal"] = Vector3.new(0,1,0)}},
                             ["ShotOrigin"] = char[weapon].Handle.BulletOrigin, 
                             ["Victims"] = {{["Humanoid"] = v.Zombie, ["Object"] = v.Head}},
