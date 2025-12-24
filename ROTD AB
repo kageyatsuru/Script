@@ -1,11 +1,11 @@
--- [[ PRECISION V11 - BALANCED MOBILE EDITION ]]
+-- [[ PRECISION V11 FINAL - SILENT AIM + MODE TOGGLE ]]
 
--- 1. SILENT AIM HOOK (Integrated from V11)
+-- 1. SILENT AIM HOOK
 local mt = getrawmetatable(game)
 local oldIndex = mt.__index
 setreadonly(mt, false)
 
-_G.isEnabled = false -- Shared variable for UI and Hook
+_G.isEnabled = false 
 
 mt.__index = newcclosure(function(self, index)
     if _G.isEnabled and (index == "Hit" or index == "Target") then
@@ -13,7 +13,7 @@ mt.__index = newcclosure(function(self, index)
         local entities = workspace:FindFirstChild("Entity")
         if entities then
             local closest = nil
-            local minMouseDist = 180 -- Slightly wider for mobile tap-assist
+            local minMouseDist = 180 
             for _, v in pairs(entities:GetChildren()) do
                 local head = v:FindFirstChild("Head")
                 local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
@@ -45,6 +45,7 @@ local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
 local targetBone = "Head" 
+local aimMode = "Crosshair" -- DEFAULT MODE
 local smoothing = 0.5 
 local maxDistance = 600 
 local fovRadius = 150 
@@ -54,44 +55,54 @@ local MIN_DIST, MAX_DIST, MIN_FOV, MAX_FOV = 50, 1500, 50, 800
 local fovCircle = Drawing.new("Circle")
 fovCircle.Thickness, fovCircle.Color, fovCircle.Transparency, fovCircle.Visible = 2, Color3.fromRGB(0, 255, 150), 0.5, false
 
--- [[ BALANCED MOBILE UI ]]
+-- UI SETUP
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name, screenGui.ResetOnSpawn, screenGui.IgnoreGuiInset = "V11_Balanced", false, true
+screenGui.Name, screenGui.ResetOnSpawn, screenGui.IgnoreGuiInset = "V11_Mobile_Final", false, true
 
 -- MENU BUTTON (Top-Right)
 local minBtn = Instance.new("TextButton", screenGui)
-minBtn.Size, minBtn.Position, minBtn.BackgroundColor3 = UDim2.new(0, 55, 0, 55), UDim2.new(0.97, -55, 0.05, 0), Color3.fromRGB(40, 40, 40)
-minBtn.Text, minBtn.TextColor3, minBtn.Font = "MENU", Color3.new(1,1,1), Enum.Font.GothamBold
-Instance.new("UICorner", minBtn).CornerRadius = UDim.new(0, 10)
+minBtn.Size, minBtn.Position = UDim2.new(0, 55, 0, 55), UDim2.new(0.97, -55, 0.05, 0)
+minBtn.BackgroundColor3, minBtn.Text, minBtn.TextColor3 = Color3.fromRGB(40, 40, 40), "MENU", Color3.new(1,1,1)
+minBtn.Font = Enum.Font.GothamBold
+Instance.new("UICorner", minBtn)
 
--- MAIN FRAME (Medium Size)
+-- MAIN FRAME (Adjusted height for the extra button)
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size, mainFrame.Position, mainFrame.BackgroundColor3 = UDim2.new(0, 220, 0, 290), UDim2.new(0.5, -110, 0.25, 0), Color3.fromRGB(25, 25, 25)
-mainFrame.Active, mainFrame.Draggable, mainFrame.Visible = true, true, true
-Instance.new("UICorner", mainFrame).CornerRadius = UDim.new(0, 12)
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 220, 0, 330), UDim2.new(0.5, -110, 0.2, 0)
+mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(25, 25, 25), true, true
+Instance.new("UICorner", mainFrame)
 
 minBtn.MouseButton1Click:Connect(function() mainFrame.Visible = not mainFrame.Visible end)
 
--- TOGGLE
+-- POWER TOGGLE
 local toggleBtn = Instance.new("TextButton", mainFrame)
-toggleBtn.Size, toggleBtn.Position, toggleBtn.BackgroundColor3 = UDim2.new(0.9, 0, 0, 55), UDim2.new(0.05, 0, 0, 15), Color3.fromRGB(200, 50, 50)
-toggleBtn.Text, toggleBtn.TextColor3, toggleBtn.Font, toggleBtn.TextSize = "OFF", Color3.new(1,1,1), Enum.Font.GothamBold, 20
+toggleBtn.Size, toggleBtn.Position = UDim2.new(0.9, 0, 0, 50), UDim2.new(0.05, 0, 0, 15)
+toggleBtn.BackgroundColor3, toggleBtn.Text = Color3.fromRGB(200, 50, 50), "OFF"
+toggleBtn.TextColor3, toggleBtn.Font, toggleBtn.TextSize = Color3.new(1,1,1), Enum.Font.GothamBold, 20
 Instance.new("UICorner", toggleBtn)
 
--- BONE
+-- MODE TOGGLE (NEW)
+local modeBtn = Instance.new("TextButton", mainFrame)
+modeBtn.Size, modeBtn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, 75)
+modeBtn.BackgroundColor3, modeBtn.Text = Color3.fromRGB(65, 65, 65), "MODE: CROSSHAIR"
+modeBtn.TextColor3, modeBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
+Instance.new("UICorner", modeBtn)
+
+-- BONE TOGGLE
 local boneBtn = Instance.new("TextButton", mainFrame)
-boneBtn.Size, boneBtn.Position, boneBtn.BackgroundColor3 = UDim2.new(0.9, 0, 0, 40), UDim2.new(0.05, 0, 0, 80), Color3.fromRGB(55, 55, 55)
-boneBtn.Text, boneBtn.TextColor3, boneBtn.Font = "TARGET: HEAD", Color3.new(1,1,1), Enum.Font.GothamBold
+boneBtn.Size, boneBtn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, 115)
+boneBtn.BackgroundColor3, boneBtn.Text = Color3.fromRGB(65, 65, 65), "TARGET: HEAD"
+boneBtn.TextColor3, boneBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
 Instance.new("UICorner", boneBtn)
 
--- SLIDERS (Balanced Thickness)
+-- SLIDERS
 local function createSlider(name, startVal, pos, min, max, callback)
     local label = Instance.new("TextLabel", mainFrame)
     label.Size, label.Position, label.Text = UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, pos), name .. ": " .. startVal
     label.TextColor3, label.BackgroundTransparency, label.Font = Color3.new(1,1,1), 1, Enum.Font.GothamBold
     
     local bar = Instance.new("Frame", mainFrame)
-    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(0.85, 0, 0, 16), UDim2.new(0.075, 0, 0, pos + 30), Color3.fromRGB(45, 45, 45)
+    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(0.85, 0, 0, 16), UDim2.new(0.075, 0, 0, pos + 25), Color3.fromRGB(45, 45, 45)
     Instance.new("UICorner", bar)
     
     local fill = Instance.new("Frame", bar)
@@ -112,46 +123,67 @@ local function createSlider(name, startVal, pos, min, max, callback)
     end)
 end
 
-createSlider("Distance", maxDistance, 135, MIN_DIST, MAX_DIST, function(v) maxDistance = v end)
-createSlider("FOV Size", fovRadius, 210, MIN_FOV, MAX_FOV, function(v) fovRadius = v end)
+createSlider("Distance", maxDistance, 160, MIN_DIST, MAX_DIST, function(v) maxDistance = v end)
+createSlider("FOV Size", fovRadius, 230, MIN_FOV, MAX_FOV, function(v) fovRadius = v end)
 
--- LOGIC
+-- UI ACTIONS
 toggleBtn.MouseButton1Click:Connect(function()
     _G.isEnabled = not _G.isEnabled
     toggleBtn.Text = _G.isEnabled and "ON" or "OFF"
     toggleBtn.BackgroundColor3 = _G.isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-    fovCircle.Visible = _G.isEnabled
+    fovCircle.Visible = (_G.isEnabled and aimMode == "Crosshair")
+end)
+
+modeBtn.MouseButton1Click:Connect(function()
+    aimMode = (aimMode == "Crosshair") and "Distance" or "Crosshair"
+    modeBtn.Text = "MODE: " .. aimMode:upper()
+    fovCircle.Visible = (_G.isEnabled and aimMode == "Crosshair")
 end)
 
 boneBtn.MouseButton1Click:Connect(function()
     targetBone = (targetBone == "Head") and "Torso" or "Head"
-    boneBtn.Text = "TARGET: " .. targetBone
+    boneBtn.Text = "TARGET: " .. targetBone:upper()
 end)
 
+-- AIMBOT ENGINE
 runService.RenderStepped:Connect(function()
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     fovCircle.Position, fovCircle.Radius = center, fovRadius
     if not _G.isEnabled then return end
+    
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    local closest, minScore = nil, fovRadius
+    
+    local closest, minScore = nil, math.huge
     local entities = workspace:FindFirstChild("Entity")
+    
     if entities then
         for _, v in ipairs(entities:GetChildren()) do
             local t = (targetBone == "Head") and v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
             local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            
             if t and h and h.Health > 0 then
-                local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
-                if dist < maxDistance then
-                    local pos, onScreen = camera:WorldToViewportPoint(t.Position)
-                    if onScreen then
-                        local mDist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                        if mDist < minScore then minScore, closest = mDist, t end
+                local worldDist = (char.HumanoidRootPart.Position - t.Position).Magnitude
+                if worldDist < maxDistance then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
+                    
+                    if aimMode == "Crosshair" then
+                        if onScreen then
+                            local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                            if mouseDist < fovRadius and mouseDist < minScore then
+                                minScore, closest = mouseDist, t
+                            end
+                        end
+                    else -- Distance Mode
+                        if worldDist < minScore then
+                            minScore, closest = worldDist, t
+                        end
                     end
                 end
             end
         end
     end
+    
     if closest then
         camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
     end
