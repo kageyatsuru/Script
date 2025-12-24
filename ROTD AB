@@ -1,3 +1,5 @@
+-- [[ PRECISION AIMBOT V10.1 - FINAL VERSION ]]
+
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
@@ -6,7 +8,10 @@ local camera = workspace.CurrentCamera
 
 -- CONTROL VARIABLES
 local isEnabled = false 
-local aimMode = "Crosshair" -- "Crosshair" or "Distance"
+local aimMode = "Crosshair" 
+local targetBone = "Head" -- "Head" or "Torso"
+local smoothing = 0.5 -- Balanced for speed and consistency
+local wallCheckEnabled = true 
 local dragging = false
 local dragStart, startPos
 
@@ -19,15 +24,15 @@ local STEP = 50
 
 -- FOV CIRCLE
 local fovCircle = Drawing.new("Circle")
-fovCircle.Thickness = 2
-fovCircle.Color = Color3.fromRGB(50, 200, 50)
+fovCircle.Thickness = 1.5
+fovCircle.Color = Color3.fromRGB(50, 255, 150)
 fovCircle.Filled = false
 fovCircle.Transparency = 0.7
 fovCircle.Visible = false
 
--- UI SETUP
+-- [[ UI SETUP ]]
 local screenGui = Instance.new("ScreenGui")
-screenGui.Name = "PrecisionAimbot_V7_1"
+screenGui.Name = "Precision_V10_Final"
 screenGui.ResetOnSpawn = false
 screenGui.Parent = player:WaitForChild("PlayerGui")
 
@@ -59,9 +64,9 @@ expandButton.TextColor3 = Color3.new(1, 1, 1)
 expandButton.BackgroundTransparency = 1
 expandButton.Parent = mainFrame
 
--- SETTINGS MENU
+-- SETTINGS MENU (ExtraMenu)
 local extraMenu = Instance.new("Frame")
-extraMenu.Size = UDim2.new(1, 0, 0, 160)
+extraMenu.Size = UDim2.new(1, 0, 0, 190) -- Increased size for Bone Toggle
 extraMenu.Position = UDim2.new(0, 0, 1, 5)
 extraMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
 extraMenu.Visible = false
@@ -69,53 +74,84 @@ extraMenu.Parent = mainFrame
 Instance.new("UICorner", extraMenu)
 
 -- Range Slider
-local rangeLabel = Instance.new("TextLabel")
+local rangeLabel = Instance.new("TextLabel", extraMenu)
 rangeLabel.Size = UDim2.new(1, 0, 0, 20)
 rangeLabel.Text = "Max Dist: " .. maxDistance
 rangeLabel.TextColor3 = Color3.new(1,1,1)
 rangeLabel.BackgroundTransparency = 1
-rangeLabel.Parent = extraMenu
 
-local rangeBar = Instance.new("Frame")
+local rangeBar = Instance.new("Frame", extraMenu)
 rangeBar.Size = UDim2.new(0.8, 0, 0, 4)
 rangeBar.Position = UDim2.new(0.1, 0, 0, 25)
 rangeBar.BackgroundColor3 = Color3.fromRGB(100,100,100)
-rangeBar.Parent = extraMenu
 
-local rangeFill = Instance.new("Frame")
+local rangeFill = Instance.new("Frame", rangeBar)
 rangeFill.Size = UDim2.new((maxDistance - MIN_DIST)/(MAX_DIST - MIN_DIST), 0, 1, 0)
 rangeFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-rangeFill.Parent = rangeBar
 
 -- FOV Slider
-local fovLabel = Instance.new("TextLabel")
+local fovLabel = Instance.new("TextLabel", extraMenu)
 fovLabel.Size = UDim2.new(1, 0, 0, 20)
 fovLabel.Position = UDim2.new(0, 0, 0, 50)
 fovLabel.Text = "FOV: " .. fovRadius
 fovLabel.TextColor3 = Color3.new(1,1,1)
 fovLabel.BackgroundTransparency = 1
-fovLabel.Parent = extraMenu
 
-local fovBar = Instance.new("Frame")
+local fovBar = Instance.new("Frame", extraMenu)
 fovBar.Size = UDim2.new(0.8, 0, 0, 4)
 fovBar.Position = UDim2.new(0.1, 0, 0, 75)
 fovBar.BackgroundColor3 = Color3.fromRGB(100,100,100)
-fovBar.Parent = extraMenu
 
-local fovFill = Instance.new("Frame")
+local fovFill = Instance.new("Frame", fovBar)
 fovFill.Size = UDim2.new((fovRadius - MIN_FOV)/(MAX_FOV - MIN_FOV), 0, 1, 0)
 fovFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
-fovFill.Parent = fovBar
 
 -- MODE TOGGLE BUTTON
-local modeBtn = Instance.new("TextButton")
+local modeBtn = Instance.new("TextButton", extraMenu)
 modeBtn.Size = UDim2.new(0.8, 0, 0, 30)
 modeBtn.Position = UDim2.new(0.1, 0, 0, 110)
 modeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
 modeBtn.Text = "Mode: Crosshair"
 modeBtn.TextColor3 = Color3.new(1, 1, 1)
-modeBtn.Parent = extraMenu
 Instance.new("UICorner", modeBtn)
+
+-- BONE TOGGLE BUTTON
+local boneBtn = Instance.new("TextButton", extraMenu)
+boneBtn.Size = UDim2.new(0.8, 0, 0, 30)
+boneBtn.Position = UDim2.new(0.1, 0, 0, 150)
+boneBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+boneBtn.Text = "Target: Head"
+boneBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", boneBtn)
+
+-- [[ LOGIC FUNCTIONS ]]
+
+local function getBestPart(entity)
+    if targetBone == "Head" then
+        return entity:FindFirstChild("Head") or entity:FindFirstChild("HumanoidRootPart")
+    else
+        return entity:FindFirstChild("HumanoidRootPart") or entity:FindFirstChild("UpperTorso") or entity:FindFirstChild("Head")
+    end
+end
+
+local function isVisible(targetPart)
+    if not wallCheckEnabled then return true end
+    local char = player.Character
+    if not char then return false end
+    
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {char, targetPart.Parent}
+    
+    local result = workspace:Raycast(camera.CFrame.Position, (targetPart.Position - camera.CFrame.Position), rayParams)
+    return result == nil
+end
+
+-- Interactions
+boneBtn.MouseButton1Click:Connect(function()
+    targetBone = (targetBone == "Head") and "Torso" or "Head"
+    boneBtn.Text = "Target: " .. targetBone
+end)
 
 modeBtn.MouseButton1Click:Connect(function()
     if aimMode == "Crosshair" then
@@ -128,7 +164,6 @@ modeBtn.MouseButton1Click:Connect(function()
     modeBtn.Text = "Mode: " .. aimMode
 end)
 
--- SLIDER LOGIC
 local function updateSlider(input, bar, fill, label, min, max, varName)
     local relativeX = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
     local val = math.floor(((min + (relativeX * (max - min))) / STEP) + 0.5) * STEP
@@ -138,16 +173,15 @@ local function updateSlider(input, bar, fill, label, min, max, varName)
 end
 
 local activeSlider = nil
-rangeBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then activeSlider = "range" end end)
-fovBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then activeSlider = "fov" end end)
+rangeBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = "range" end end)
+fovBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = "fov" end end)
 
 uis.InputChanged:Connect(function(input)
     if activeSlider == "range" then updateSlider(input, rangeBar, rangeFill, rangeLabel, MIN_DIST, MAX_DIST, "maxDistance")
     elseif activeSlider == "fov" then updateSlider(input, fovBar, fovFill, fovLabel, MIN_FOV, MAX_FOV, "fovRadius") end
 end)
-uis.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.Touch or i.UserInputType == Enum.UserInputType.MouseButton1 then activeSlider = nil end end)
+uis.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = nil end end)
 
--- MAIN UI INTERACTION
 toggleBtn.MouseButton1Click:Connect(function()
     isEnabled = not isEnabled
     toggleBtn.Text = isEnabled and "ON" or "OFF"
@@ -157,7 +191,7 @@ end)
 
 expandButton.MouseButton1Click:Connect(function() extraMenu.Visible = not extraMenu.Visible end)
 
--- DRAGGING
+-- Dragging Logic
 toggleBtn.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
         dragging = true
@@ -174,7 +208,7 @@ uis.InputChanged:Connect(function(input)
     end
 end)
 
--- AIMBOT CORE LOOP
+-- [[ AIMBOT CORE LOOP ]]
 runService.RenderStepped:Connect(function()
     local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     fovCircle.Position = screenCenter
@@ -183,7 +217,8 @@ runService.RenderStepped:Connect(function()
     if not isEnabled then return end
     
     local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
     
     local closestTarget = nil
     local minScore = math.huge 
@@ -191,26 +226,27 @@ runService.RenderStepped:Connect(function()
     local entities = workspace:FindFirstChild("Entity")
     if entities then
         for _, v in pairs(entities:GetChildren()) do
-            local head = v:FindFirstChild("Head")
-            if head and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
-                local worldDist = (char.HumanoidRootPart.Position - head.Position).Magnitude
+            local targetPart = getBestPart(v)
+            local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            
+            if targetPart and hum and hum.Health > 0 then
+                local worldDist = (root.Position - targetPart.Position).Magnitude
                 
-                if worldDist < maxDistance then
+                if worldDist < maxDistance and isVisible(targetPart) then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                    
                     if aimMode == "Crosshair" then
-                        -- Requires target to be on screen and inside the circle
-                        local screenPos, onScreen = camera:WorldToViewportPoint(head.Position)
                         if onScreen then
                             local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
                             if mouseDist < fovRadius and mouseDist < minScore then
                                 minScore = mouseDist
-                                closestTarget = head
+                                closestTarget = targetPart
                             end
                         end
                     else
-                        -- Distance Mode: Snaps even if they are behind you
                         if worldDist < minScore then
                             minScore = worldDist
-                            closestTarget = head
+                            closestTarget = targetPart
                         end
                     end
                 end
@@ -219,7 +255,7 @@ runService.RenderStepped:Connect(function()
     end
 
     if closestTarget then
-        -- Snap camera to target
-        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closestTarget.Position), 0.6)
+        local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothing)
     end
 end)
