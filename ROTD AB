@@ -1,6 +1,6 @@
--- [[ PRECISION AIMBOT V12 - FINAL ]]
+-- [[ V12.1 PERFORMANCE & UI FIX ]]
 
--- 1. REMOTE REDIRECT HOOK (Ultimate Hit-Reg Fix)
+-- 1. REMOTE REDIRECT HOOK
 local mt = getrawmetatable(game)
 local oldNamecall = mt.__namecall
 setreadonly(mt, false)
@@ -8,36 +8,12 @@ setreadonly(mt, false)
 mt.__namecall = newcclosure(function(self, ...)
     local method = getnamecallmethod()
     local args = {...}
-
     if _G.isEnabled and (method == "FireServer" or method == "InvokeServer") then
         local entities = workspace:FindFirstChild("Entity")
-        if entities then
-            local closest = nil
-            local minMouseDist = 150
-            
-            for _, v in pairs(entities:GetChildren()) do
-                local head = v:FindFirstChild("Head")
-                if head and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
-                    local screenPos, onScreen = workspace.CurrentCamera:WorldToViewportPoint(head.Position)
-                    if onScreen then
-                        local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - Vector2.new(workspace.CurrentCamera.ViewportSize.X/2, workspace.CurrentCamera.ViewportSize.Y/2)).Magnitude
-                        if mouseDist < minMouseDist then
-                            minMouseDist = mouseDist
-                            closest = head
-                        end
-                    end
-                end
-            end
-            
-            if closest then
-                for i, arg in pairs(args) do
-                    if typeof(arg) == "Vector3" then
-                        args[i] = closest.Position
-                    elseif typeof(arg) == "Instance" and arg:IsA("BasePart") then
-                        args[i] = closest
-                    end
-                end
-                return oldNamecall(self, unpack(args))
+        if entities and _G.CurrentTarget then
+            for i, arg in pairs(args) do
+                if typeof(arg) == "Vector3" then args[i] = _G.CurrentTarget.Position
+                elseif typeof(arg) == "Instance" and arg:IsA("BasePart") then args[i] = _G.CurrentTarget end
             end
         end
     end
@@ -45,111 +21,110 @@ mt.__namecall = newcclosure(function(self, ...)
 end)
 setreadonly(mt, true)
 
--- 2. MAIN SCRIPT
+-- 2. MAIN SETUP
 local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
 _G.isEnabled = false 
+_G.CurrentTarget = nil
 local aimMode, targetBone = "Crosshair", "Head"
-local smoothing, wallCheckEnabled = 0.5, true
-local dragging = false
-local dragStart, startPos
-
+local smoothing = 0.5 
 local maxDistance, fovRadius = 600, 150
-local MIN_DIST, MAX_DIST, MIN_FOV, MAX_FOV, STEP = 50, 1000, 50, 500, 50
+
+-- UI SETUP
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.IgnoreGuiInset = true
+
+local container = Instance.new("Frame", screenGui)
+container.Size = UDim2.new(0, 150, 0, 50)
+container.Position = UDim2.new(0.8, 0, 0.4, 0)
+container.BackgroundTransparency = 1
+container.Active = true -- Critical for dragging
+
+local toggleBtn = Instance.new("TextButton", container)
+toggleBtn.Size, toggleBtn.Text = UDim2.new(0, 50, 0, 50), "OFF"
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+Instance.new("UICorner", toggleBtn)
 
 -- FOV CIRCLE
 local fovCircle = Drawing.new("Circle")
-fovCircle.Thickness, fovCircle.Color, fovCircle.Transparency, fovCircle.Visible = 1.5, Color3.fromRGB(50, 255, 150), 0.7, false
+fovCircle.Thickness, fovCircle.Visible = 1.5, false
 
--- UI CORE
-local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name, screenGui.ResetOnSpawn = "Precision_V12", false
+-- BETTER DRAGGING LOGIC
+local dragInput, dragStart, startPos
+container.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragStart = input.Position
+        startPos = container.Position
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then dragStart = nil end
+        end)
+    end
+end)
 
-local container = Instance.new("Frame", screenGui)
-container.Size, container.Position, container.BackgroundTransparency = UDim2.new(0, 150, 0, 50), UDim2.new(0.95, -150, 0.4, 0), 1
+uis.InputChanged:Connect(function(input)
+    if dragStart and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        container.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
 
-local toggleBtn = Instance.new("TextButton", container)
-toggleBtn.Size, toggleBtn.BackgroundColor3, toggleBtn.Text, toggleBtn.TextColor3 = UDim2.new(0, 50, 0, 50), Color3.fromRGB(200, 50, 50), "OFF", Color3.new(1,1,1)
-Instance.new("UICorner", toggleBtn)
+-- OPTIMIZED SCANNING (Only runs 10 times a second, not 60+)
+local targetList = {}
+task.spawn(function()
+    while task.wait(0.1) do
+        if _G.isEnabled then
+            local entities = workspace:FindFirstChild("Entity")
+            targetList = entities and entities:GetChildren() or {}
+        end
+    end
+end)
 
-local mainFrame = Instance.new("Frame", container)
-mainFrame.Size, mainFrame.Position, mainFrame.BackgroundColor3 = UDim2.new(0, 100, 0, 50), UDim2.new(0, 55, 0, 0), Color3.fromRGB(35, 35, 35)
-Instance.new("UICorner", mainFrame)
-
-local expandBtn = Instance.new("TextButton", mainFrame)
-expandBtn.Size, expandBtn.Text, expandBtn.TextColor3, expandBtn.BackgroundTransparency = UDim2.new(1, 0, 1, 0), "Settings", Color3.new(1, 1, 1), 1
-
-local extraMenu = Instance.new("Frame", mainFrame)
-extraMenu.Size, extraMenu.Position, extraMenu.BackgroundColor3, extraMenu.Visible = UDim2.new(1, 0, 0, 190), UDim2.new(0, 0, 1, 5), Color3.fromRGB(30, 30, 30), false
-Instance.new("UICorner", extraMenu)
-
--- Slider Helpers
-local function setupSlider(labelName, startVal, pos, min, max, varName)
-    local label = Instance.new("TextLabel", extraMenu)
-    label.Size, label.Position, label.Text, label.TextColor3, label.BackgroundTransparency = UDim2.new(1, 0, 0, 20), UDim2.new(0, 0, 0, pos), labelName .. startVal, Color3.new(1,1,1), 1
-    local bar = Instance.new("Frame", extraMenu)
-    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(0.8, 0, 0, 4), UDim2.new(0.1, 0, 0, pos + 25), Color3.fromRGB(100,100,100)
-    local fill = Instance.new("Frame", bar)
-    fill.Size, fill.BackgroundColor3 = UDim2.new((startVal - min) / (max - min), 0, 1, 0), Color3.fromRGB(50, 200, 50)
-    return bar, fill, label
-end
-
-local rBar, rFill, rLab = setupSlider("Max Dist: ", maxDistance, 0, MIN_DIST, MAX_DIST, "maxDistance")
-local fBar, fFill, fLab = setupSlider("FOV: ", fovRadius, 50, MIN_FOV, MAX_FOV, "fovRadius")
-
-local modeBtn = Instance.new("TextButton", extraMenu)
-modeBtn.Size, modeBtn.Position, modeBtn.BackgroundColor3, modeBtn.Text, modeBtn.TextColor3 = UDim2.new(0.8, 0, 0, 30), UDim2.new(0.1, 0, 0, 110), Color3.fromRGB(60, 60, 60), "Mode: Crosshair", Color3.new(1, 1, 1)
-Instance.new("UICorner", modeBtn)
-
-local boneBtn = Instance.new("TextButton", extraMenu)
-boneBtn.Size, boneBtn.Position, boneBtn.BackgroundColor3, boneBtn.Text, boneBtn.TextColor3 = UDim2.new(0.8, 0, 0, 30), UDim2.new(0.1, 0, 0, 150), Color3.fromRGB(60, 60, 60), "Target: Head", Color3.new(1, 1, 1)
-Instance.new("UICorner", boneBtn)
-
--- LOGIC
-local function isVisible(part)
-    if not wallCheckEnabled then return true end
-    local p = RaycastParams.new()
-    p.FilterType, p.FilterDescendantsInstances = Enum.RaycastFilterType.Exclude, {player.Character, part.Parent}
-    return workspace:Raycast(camera.CFrame.Position, (part.Position - camera.CFrame.Position), p) == nil
-end
-
-boneBtn.MouseButton1Click:Connect(function() targetBone = (targetBone == "Head") and "Torso" or "Head"; boneBtn.Text = "Target: " .. targetBone end)
-modeBtn.MouseButton1Click:Connect(function() aimMode = (aimMode == "Crosshair") and "Distance" or "Crosshair"; fovCircle.Visible = (_G.isEnabled and aimMode == "Crosshair"); modeBtn.Text = "Mode: " .. aimMode end)
-toggleBtn.MouseButton1Click:Connect(function() _G.isEnabled = not _G.isEnabled; toggleBtn.Text = _G.isEnabled and "ON" or "OFF"; toggleBtn.BackgroundColor3 = _G.isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50); if aimMode == "Crosshair" then fovCircle.Visible = _G.isEnabled end end)
-expandBtn.MouseButton1Click:Connect(function() extraMenu.Visible = not extraMenu.Visible end)
-
+-- MAIN LOOP (High performance)
 runService.RenderStepped:Connect(function()
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     fovCircle.Position, fovCircle.Radius = center, fovRadius
-    if not _G.isEnabled then uis.MouseBehavior = Enum.MouseBehavior.Default; return end
-    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+    
+    if not _G.isEnabled then 
+        _G.CurrentTarget = nil
+        return 
+    end
+    
     local char = player.Character
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
     local closest, minScore = nil, math.huge
-    local entities = workspace:FindFirstChild("Entity")
-    if entities then
-        for _, v in pairs(entities:GetChildren()) do
-            local t = (targetBone == "Head") and v:FindFirstChild("Head") or (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Head"))
-            local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
-            if t and h and h.Health > 0 then
-                local d = (char.HumanoidRootPart.Position - t.Position).Magnitude
-                if d < maxDistance and isVisible(t) then
-                    local pos, on = camera:WorldToViewportPoint(t.Position)
-                    if aimMode == "Crosshair" and on then
-                        local mD = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                        if mD < fovRadius and mD < minScore then minScore, closest = mD, t end
-                    elseif aimMode == "Distance" and d < minScore then minScore, closest = d, t end
+    
+    for _, v in ipairs(targetList) do
+        local t = (targetBone == "Head") and v:FindFirstChild("Head") or (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Head"))
+        local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+        
+        if t and h and h.Health > 0 then
+            local d = (root.Position - t.Position).Magnitude
+            if d < maxDistance then
+                local pos, on = camera:WorldToViewportPoint(t.Position)
+                if on then
+                    local mD = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if mD < fovRadius and mD < minScore then
+                        minScore, closest = mD, t
+                    end
                 end
             end
         end
     end
+
+    _G.CurrentTarget = closest
     if closest then
         camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
-        camera.Focus = closest.CFrame
     end
 end)
 
--- Dragging & Sliders logic omitted for brevity but remains active in functional V12 --
+toggleBtn.MouseButton1Click:Connect(function()
+    _G.isEnabled = not _G.isEnabled
+    toggleBtn.Text = _G.isEnabled and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = _G.isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    fovCircle.Visible = _G.isEnabled
+end)
