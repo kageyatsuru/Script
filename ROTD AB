@@ -1,4 +1,4 @@
--- [[ PRECISION MOBILE V1.1 - TOP-RIGHT MENU ]]
+-- [[ PRECISION MOBILE V1.1 - TOP-RIGHT MENU ]] 
 
 local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
