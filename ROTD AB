@@ -1,73 +1,264 @@
--- [[ PRECISION V13 - PURE SILENT AIM ]]
+-- [[ PRECISION AIMBOT V10.2 - HIT-REG & FOCUS FIX ]]
 
+local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
-_G.isEnabled = false
 
--- 1. THE SILENT AIM HOOK (Zero Lag)
-local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
-setreadonly(mt, false)
+-- CONTROL VARIABLES
+local isEnabled = false 
+local aimMode = "Crosshair" 
+local targetBone = "Head" 
+local smoothing = 0.5 
+local wallCheckEnabled = true 
+local dragging = false
+local dragStart, startPos
 
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
+-- AIMBOT SETTINGS
+local maxDistance = 600 
+local fovRadius = 150 
+local MIN_DIST, MAX_DIST = 50, 1000
+local MIN_FOV, MAX_FOV = 50, 500
+local STEP = 50 
 
-    -- Listen for the gun sending damage/hit data to the server
-    if _G.isEnabled and (method == "FireServer" or method == "InvokeServer") then
-        local entities = workspace:FindFirstChild("Entity")
-        if entities then
-            local closest = nil
-            local minMouseDist = 150 -- Target must be within this many pixels of your center
+-- FOV CIRCLE
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 1.5
+fovCircle.Color = Color3.fromRGB(50, 255, 150)
+fovCircle.Filled = false
+fovCircle.Transparency = 0.7
+fovCircle.Visible = false
+
+-- [[ UI SETUP ]]
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "Precision_V10_2"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local container = Instance.new("Frame")
+container.Size = UDim2.new(0, 150, 0, 50)
+container.Position = UDim2.new(0.95, -150, 0.4, 0) 
+container.BackgroundTransparency = 1
+container.Parent = screenGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Parent = container
+Instance.new("UICorner", toggleBtn)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 100, 0, 50)
+mainFrame.Position = UDim2.new(0, 55, 0, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.Parent = container
+Instance.new("UICorner", mainFrame)
+
+local expandButton = Instance.new("TextButton")
+expandButton.Size = UDim2.new(1, 0, 1, 0)
+expandButton.Text = "Settings"
+expandButton.TextColor3 = Color3.new(1, 1, 1)
+expandButton.BackgroundTransparency = 1
+expandButton.Parent = mainFrame
+
+local extraMenu = Instance.new("Frame")
+extraMenu.Size = UDim2.new(1, 0, 0, 190)
+extraMenu.Position = UDim2.new(0, 0, 1, 5)
+extraMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+extraMenu.Visible = false
+extraMenu.Parent = mainFrame
+Instance.new("UICorner", extraMenu)
+
+-- Range Slider
+local rangeLabel = Instance.new("TextLabel", extraMenu)
+rangeLabel.Size = UDim2.new(1, 0, 0, 20)
+rangeLabel.Text = "Max Dist: " .. maxDistance
+rangeLabel.TextColor3 = Color3.new(1,1,1)
+rangeLabel.BackgroundTransparency = 1
+
+local rangeBar = Instance.new("Frame", extraMenu)
+rangeBar.Size = UDim2.new(0.8, 0, 0, 4)
+rangeBar.Position = UDim2.new(0.1, 0, 0, 25)
+rangeBar.BackgroundColor3 = Color3.fromRGB(100,100,100)
+
+local rangeFill = Instance.new("Frame", rangeBar)
+rangeFill.Size = UDim2.new((maxDistance - MIN_DIST)/(MAX_DIST - MIN_DIST), 0, 1, 0)
+rangeFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+
+-- FOV Slider
+local fovLabel = Instance.new("TextLabel", extraMenu)
+fovLabel.Size = UDim2.new(1, 0, 0, 20)
+fovLabel.Position = UDim2.new(0, 0, 0, 50)
+fovLabel.Text = "FOV: " .. fovRadius
+fovLabel.TextColor3 = Color3.new(1,1,1)
+fovLabel.BackgroundTransparency = 1
+
+local fovBar = Instance.new("Frame", extraMenu)
+fovBar.Size = UDim2.new(0.8, 0, 0, 4)
+fovBar.Position = UDim2.new(0.1, 0, 0, 75)
+fovBar.BackgroundColor3 = Color3.fromRGB(100,100,100)
+
+local fovFill = Instance.new("Frame", fovBar)
+fovFill.Size = UDim2.new((fovRadius - MIN_FOV)/(MAX_FOV - MIN_FOV), 0, 1, 0)
+fovFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+
+-- Mode Toggle
+local modeBtn = Instance.new("TextButton", extraMenu)
+modeBtn.Size = UDim2.new(0.8, 0, 0, 30)
+modeBtn.Position = UDim2.new(0.1, 0, 0, 110)
+modeBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+modeBtn.Text = "Mode: Crosshair"
+modeBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", modeBtn)
+
+-- Bone Toggle
+local boneBtn = Instance.new("TextButton", extraMenu)
+boneBtn.Size = UDim2.new(0.8, 0, 0, 30)
+boneBtn.Position = UDim2.new(0.1, 0, 0, 150)
+boneBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+boneBtn.Text = "Target: Head"
+boneBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", boneBtn)
+
+-- [[ LOGIC FUNCTIONS ]]
+
+local function getBestPart(entity)
+    if targetBone == "Head" then
+        return entity:FindFirstChild("Head") or entity:FindFirstChild("HumanoidRootPart")
+    else
+        return entity:FindFirstChild("HumanoidRootPart") or entity:FindFirstChild("UpperTorso") or entity:FindFirstChild("Head")
+    end
+end
+
+local function isVisible(targetPart)
+    if not wallCheckEnabled then return true end
+    local char = player.Character
+    if not char then return false end
+    local rayParams = RaycastParams.new()
+    rayParams.FilterType = Enum.RaycastFilterType.Exclude
+    rayParams.FilterDescendantsInstances = {char, targetPart.Parent}
+    local result = workspace:Raycast(camera.CFrame.Position, (targetPart.Position - camera.CFrame.Position), rayParams)
+    return result == nil
+end
+
+boneBtn.MouseButton1Click:Connect(function()
+    targetBone = (targetBone == "Head") and "Torso" or "Head"
+    boneBtn.Text = "Target: " .. targetBone
+end)
+
+modeBtn.MouseButton1Click:Connect(function()
+    if aimMode == "Crosshair" then
+        aimMode = "Distance"
+        fovCircle.Visible = false
+    else
+        aimMode = "Crosshair"
+        fovCircle.Visible = isEnabled
+    end
+    modeBtn.Text = "Mode: " .. aimMode
+end)
+
+local function updateSlider(input, bar, fill, label, min, max, varName)
+    local relativeX = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+    local val = math.floor(((min + (relativeX * (max - min))) / STEP) + 0.5) * STEP
+    fill.Size = UDim2.new((val - min) / (max - min), 0, 1, 0)
+    label.Text = (varName == "maxDistance" and "Max Dist: " or "FOV: ") .. val
+    if varName == "maxDistance" then maxDistance = val else fovRadius = val end
+end
+
+local activeSlider = nil
+rangeBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = "range" end end)
+fovBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = "fov" end end)
+
+uis.InputChanged:Connect(function(input)
+    if activeSlider == "range" then updateSlider(input, rangeBar, rangeFill, rangeLabel, MIN_DIST, MAX_DIST, "maxDistance")
+    elseif activeSlider == "fov" then updateSlider(input, fovBar, fovFill, fovLabel, MIN_FOV, MAX_FOV, "fovRadius") end
+end)
+uis.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 or i.UserInputType == Enum.UserInputType.Touch then activeSlider = nil end end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    if aimMode == "Crosshair" then fovCircle.Visible = isEnabled end
+end)
+
+expandButton.MouseButton1Click:Connect(function() extraMenu.Visible = not extraMenu.Visible end)
+
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = container.Position
+        input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then dragging = false end end)
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        container.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- [[ AIMBOT CORE LOOP ]]
+runService.RenderStepped:Connect(function()
+    local screenCenter = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Position = screenCenter
+    fovCircle.Radius = fovRadius
+    
+    if not isEnabled then 
+        uis.MouseBehavior = Enum.MouseBehavior.Default
+        return 
+    end
+    
+    -- Force mouse behavior to center for hit-reg
+    uis.MouseBehavior = Enum.MouseBehavior.LockCenter
+    
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local closestTarget = nil
+    local minScore = math.huge 
+
+    local entities = workspace:FindFirstChild("Entity")
+    if entities then
+        for _, v in pairs(entities:GetChildren()) do
+            local targetPart = getBestPart(v)
+            local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
             
-            for _, v in pairs(entities:GetChildren()) do
-                local head = v:FindFirstChild("Head")
-                local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            if targetPart and hum and hum.Health > 0 then
+                local worldDist = (root.Position - targetPart.Position).Magnitude
                 
-                if head and hum and hum.Health > 0 then
-                    -- Check if they are on your screen
-                    local pos, onScreen = camera:WorldToViewportPoint(head.Position)
-                    if onScreen then
-                        local mouseDist = (Vector2.new(pos.X, pos.Y) - Vector2.new(camera.ViewportSize.X/2, camera.ViewportSize.Y/2)).Magnitude
-                        if mouseDist < minMouseDist then
-                            minMouseDist = mouseDist
-                            closest = head
+                if worldDist < maxDistance and isVisible(targetPart) then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(targetPart.Position)
+                    
+                    if aimMode == "Crosshair" then
+                        if onScreen then
+                            local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - screenCenter).Magnitude
+                            if mouseDist < fovRadius and mouseDist < minScore then
+                                minScore = mouseDist
+                                closestTarget = targetPart
+                            end
+                        end
+                    else
+                        if worldDist < minScore then
+                            minScore = worldDist
+                            closestTarget = targetPart
                         end
                     end
                 end
             end
-            
-            -- REDIRECT THE BULLET
-            if closest then
-                for i, arg in pairs(args) do
-                    if typeof(arg) == "Vector3" then
-                        args[i] = closest.Position
-                    elseif typeof(arg) == "Instance" and arg:IsA("BasePart") then
-                        args[i] = closest
-                    end
-                end
-                return oldNamecall(self, unpack(args))
-            end
         end
     end
-    return oldNamecall(self, unpack(args))
-end)
-setreadonly(mt, true)
 
--- 2. SIMPLE TOGGLE UI
-local screenGui = Instance.new("ScreenGui", player.PlayerGui)
-screenGui.DisplayOrder = 999
-
-local toggleBtn = Instance.new("TextButton", screenGui)
-toggleBtn.Size = UDim2.new(0, 100, 0, 50)
-toggleBtn.Position = UDim2.new(0.5, -50, 0.05, 0)
-toggleBtn.Text = "SILENT: OFF"
-toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-toggleBtn.TextColor3 = Color3.new(1,1,1)
-toggleBtn.Draggable = true -- Built-in Roblox dragging (Low lag)
-
-toggleBtn.MouseButton1Click:Connect(function()
-    _G.isEnabled = not _G.isEnabled
-    toggleBtn.Text = _G.isEnabled and "SILENT: ON" or "SILENT: OFF"
-    toggleBtn.BackgroundColor3 = _G.isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    if closestTarget then
+        -- THE FOCUS FIX
+        local targetCFrame = CFrame.new(camera.CFrame.Position, closestTarget.Position)
+        camera.CFrame = camera.CFrame:Lerp(targetCFrame, smoothing)
+        camera.Focus = closestTarget.CFrame
+    end
 end)
