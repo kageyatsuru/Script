@@ -1,1 +1,169 @@
 
+-- [[ PRECISION AIMBOT V10.2 - LARGE UI EDITION ]]
+
+local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+local camera = workspace.CurrentCamera
+
+-- CONTROL VARIABLES
+local isEnabled = false 
+local aimMode = "Crosshair" 
+local targetBone = "Head" 
+local smoothing = 0.5 
+local maxDistance = 600 
+local fovRadius = 150 
+
+-- SLIDER BOUNDARIES
+local MIN_DIST, MAX_DIST = 50, 1500
+local MIN_FOV, MAX_FOV = 50, 800
+
+-- FOV CIRCLE
+local fovCircle = Drawing.new("Circle")
+fovCircle.Thickness = 2
+fovCircle.Color = Color3.fromRGB(0, 255, 150)
+fovCircle.Visible = false
+
+-- [[ LARGE UI SETUP ]]
+local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
+screenGui.Name = "BigUI_Aimbot"
+screenGui.ResetOnSpawn = false
+
+local mainContainer = Instance.new("Frame", screenGui)
+mainContainer.Size = UDim2.new(0, 250, 0, 320) -- Made the whole menu much wider and taller
+mainContainer.Position = UDim2.new(0.7, 0, 0.3, 0)
+mainContainer.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+mainContainer.BorderSizePixel = 0
+mainContainer.Active = true
+mainContainer.Draggable = true -- Built-in stable dragging
+Instance.new("UICorner", mainContainer).CornerRadius = UDim.new(0, 10)
+
+-- Header Title
+local title = Instance.new("TextLabel", mainContainer)
+title.Size = UDim2.new(1, 0, 0, 40)
+title.Text = "PRECISION V10.2"
+title.TextColor3 = Color3.new(1,1,1)
+title.BackgroundTransparency = 1
+title.Font = Enum.Font.GothamBold
+title.TextSize = 18
+
+-- MAIN TOGGLE (BIG)
+local toggleBtn = Instance.new("TextButton", mainContainer)
+toggleBtn.Size = UDim2.new(0.9, 0, 0, 60) -- Extra large button
+toggleBtn.Position = UDim2.new(0.05, 0, 0, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "OFF"
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Font = Enum.Font.GothamBold
+toggleBtn.TextSize = 20
+Instance.new("UICorner", toggleBtn)
+
+-- BONE TOGGLE (BIG)
+local boneBtn = Instance.new("TextButton", mainContainer)
+boneBtn.Size = UDim2.new(0.9, 0, 0, 40)
+boneBtn.Position = UDim2.new(0.05, 0, 0, 120)
+boneBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+boneBtn.Text = "Target: Head"
+boneBtn.TextColor3 = Color3.new(1, 1, 1)
+Instance.new("UICorner", boneBtn)
+
+-- SLIDER CREATOR FUNCTION (MAKES THEM BIG)
+local function createBigSlider(name, startVal, pos, min, max)
+    local label = Instance.new("TextLabel", mainContainer)
+    label.Size = UDim2.new(1, 0, 0, 30)
+    label.Position = UDim2.new(0, 0, 0, pos)
+    label.Text = name .. ": " .. startVal
+    label.TextColor3 = Color3.new(1,1,1)
+    label.BackgroundTransparency = 1
+    
+    local bar = Instance.new("Frame", mainContainer)
+    bar.Size = UDim2.new(0.85, 0, 0, 12) -- Much thicker bar
+    bar.Position = UDim2.new(0.075, 0, 0, pos + 30)
+    bar.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    
+    local fill = Instance.new("Frame", bar)
+    fill.Size = UDim2.new((startVal - min) / (max - min), 0, 1, 0)
+    fill.BackgroundColor3 = Color3.fromRGB(0, 200, 100)
+    Instance.new("UICorner", fill)
+    
+    return bar, fill, label
+end
+
+local distBar, distFill, distLab = createBigSlider("Max Distance", maxDistance, 170, MIN_DIST, MAX_DIST)
+local fovBar, fovFill, fovLab = createBigSlider("FOV Radius", fovRadius, 240, MIN_FOV, MAX_FOV)
+
+-- [[ SLIDER LOGIC ]]
+local function handleSlider(input, bar, fill, label, min, max, textPrefix, callback)
+    local percent = math.clamp((input.Position.X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
+    local val = math.floor(min + (percent * (max - min)))
+    fill.Size = UDim2.new(percent, 0, 1, 0)
+    label.Text = textPrefix .. ": " .. val
+    callback(val)
+end
+
+local draggingDist, draggingFov = false, false
+distBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingDist = true end end)
+fovBar.InputBegan:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingFov = true end end)
+uis.InputEnded:Connect(function(i) if i.UserInputType == Enum.UserInputType.MouseButton1 then draggingDist, draggingFov = false, false end end)
+
+uis.InputChanged:Connect(function(input)
+    if draggingDist then
+        handleSlider(input, distBar, distFill, distLab, MIN_DIST, MAX_DIST, "Max Distance", function(v) maxDistance = v end)
+    elseif draggingFov then
+        handleSlider(input, fovBar, fovFill, fovLab, MIN_FOV, MAX_FOV, "FOV Radius", function(v) fovRadius = v end)
+    end
+end)
+
+-- [[ AIMBOT LOGIC ]]
+boneBtn.MouseButton1Click:Connect(function()
+    targetBone = (targetBone == "Head") and "Torso" or "Head"
+    boneBtn.Text = "Target: " .. targetBone
+end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    fovCircle.Visible = isEnabled
+end)
+
+runService.RenderStepped:Connect(function()
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Position = center
+    fovCircle.Radius = fovRadius
+    
+    if not isEnabled then return end
+    
+    local char = player.Character
+    local root = char and char:FindFirstChild("HumanoidRootPart")
+    if not root then return end
+    
+    local closest, minScore = nil, fovRadius
+    local entities = workspace:FindFirstChild("Entity")
+    
+    if entities then
+        for _, v in ipairs(entities:GetChildren()) do
+            local t = (targetBone == "Head") and v:FindFirstChild("Head") or (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("UpperTorso"))
+            local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            
+            if t and hum and hum.Health > 0 then
+                local d = (root.Position - t.Position).Magnitude
+                if d < maxDistance then
+                    local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
+                    if onScreen then
+                        local mDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        if mDist < minScore then
+                            minScore = mDist
+                            closest = t
+                        end
+                    end
+                end
+            end
+        end
+    end
+
+    if closest then
+        local targetCF = CFrame.new(camera.CFrame.Position, closest.Position)
+        camera.CFrame = camera.CFrame:Lerp(targetCF, smoothing)
+    end
+end)
