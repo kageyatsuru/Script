@@ -1,130 +1,85 @@
--- [[ V12.1 PERFORMANCE & UI FIX ]]
-
--- 1. REMOTE REDIRECT HOOK
-local mt = getrawmetatable(game)
-local oldNamecall = mt.__namecall
-setreadonly(mt, false)
-
-mt.__namecall = newcclosure(function(self, ...)
-    local method = getnamecallmethod()
-    local args = {...}
-    if _G.isEnabled and (method == "FireServer" or method == "InvokeServer") then
-        local entities = workspace:FindFirstChild("Entity")
-        if entities and _G.CurrentTarget then
-            for i, arg in pairs(args) do
-                if typeof(arg) == "Vector3" then args[i] = _G.CurrentTarget.Position
-                elseif typeof(arg) == "Instance" and arg:IsA("BasePart") then args[i] = _G.CurrentTarget end
-            end
-        end
-    end
-    return oldNamecall(self, unpack(args))
-end)
-setreadonly(mt, true)
-
--- 2. MAIN SETUP
 local player = game:GetService("Players").LocalPlayer
 local runService = game:GetService("RunService")
 local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
-_G.isEnabled = false 
-_G.CurrentTarget = nil
-local aimMode, targetBone = "Crosshair", "Head"
-local smoothing = 0.5 
-local maxDistance, fovRadius = 600, 150
+-- SETTINGS
+local isEnabled = false
+local smoothing = 0.4 -- Slightly lower for better FPS
+local fovRadius = 150
+local maxDistance = 600
 
--- UI SETUP
+-- UI SETUP (High Priority)
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.IgnoreGuiInset = true
+screenGui.Name = "Stable_Aimbot"
+screenGui.DisplayOrder = 999 -- Ensures it stays on top
+screenGui.ResetOnSpawn = false
 
 local container = Instance.new("Frame", screenGui)
-container.Size = UDim2.new(0, 150, 0, 50)
-container.Position = UDim2.new(0.8, 0, 0.4, 0)
-container.BackgroundTransparency = 1
-container.Active = true -- Critical for dragging
+container.Size = UDim2.new(0, 100, 0, 50)
+container.Position = UDim2.new(0.5, -50, 0.1, 0) -- Top middle
+container.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+container.Active = true
+container.Draggable = true -- Simplest way to move UI
 
 local toggleBtn = Instance.new("TextButton", container)
-toggleBtn.Size, toggleBtn.Text = UDim2.new(0, 50, 0, 50), "OFF"
+toggleBtn.Size = UDim2.new(1, 0, 1, 0)
+toggleBtn.Text = "AIM: OFF"
 toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
-Instance.new("UICorner", toggleBtn)
+toggleBtn.TextColor3 = Color3.new(1,1,1)
 
--- FOV CIRCLE
+-- FOV CIRCLE (Optimized)
 local fovCircle = Drawing.new("Circle")
-fovCircle.Thickness, fovCircle.Visible = 1.5, false
+fovCircle.Thickness = 1
+fovCircle.Color = Color3.new(0, 1, 0)
+fovCircle.Visible = false
 
--- BETTER DRAGGING LOGIC
-local dragInput, dragStart, startPos
-container.InputBegan:Connect(function(input)
-    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-        dragStart = input.Position
-        startPos = container.Position
-        input.Changed:Connect(function()
-            if input.UserInputState == Enum.UserInputState.End then dragStart = nil end
-        end)
-    end
+-- TOGGLE ACTION
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "AIM: ON" or "AIM: OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+    fovCircle.Visible = isEnabled
 end)
 
-uis.InputChanged:Connect(function(input)
-    if dragStart and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
-        local delta = input.Position - dragStart
-        container.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
-    end
-end)
-
--- OPTIMIZED SCANNING (Only runs 10 times a second, not 60+)
-local targetList = {}
-task.spawn(function()
-    while task.wait(0.1) do
-        if _G.isEnabled then
-            local entities = workspace:FindFirstChild("Entity")
-            targetList = entities and entities:GetChildren() or {}
-        end
-    end
-end)
-
--- MAIN LOOP (High performance)
-runService.RenderStepped:Connect(function()
+-- GET TARGET FUNCTION (Run only when needed)
+local function getTarget()
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    fovCircle.Position, fovCircle.Radius = center, fovRadius
+    local closest, minScore = nil, fovRadius
+    local entities = workspace:FindFirstChild("Entity")
     
-    if not _G.isEnabled then 
-        _G.CurrentTarget = nil
-        return 
-    end
-    
-    local char = player.Character
-    local root = char and char:FindFirstChild("HumanoidRootPart")
-    if not root then return end
-    
-    local closest, minScore = nil, math.huge
-    
-    for _, v in ipairs(targetList) do
-        local t = (targetBone == "Head") and v:FindFirstChild("Head") or (v:FindFirstChild("HumanoidRootPart") or v:FindFirstChild("Head"))
-        local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
-        
-        if t and h and h.Health > 0 then
-            local d = (root.Position - t.Position).Magnitude
-            if d < maxDistance then
-                local pos, on = camera:WorldToViewportPoint(t.Position)
-                if on then
-                    local mD = (Vector2.new(pos.X, pos.Y) - center).Magnitude
-                    if mD < fovRadius and mD < minScore then
-                        minScore, closest = mD, t
+    if entities then
+        for _, v in ipairs(entities:GetChildren()) do
+            local head = v:FindFirstChild("Head")
+            local hum = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
+            
+            if head and hum and hum.Health > 0 then
+                local pos, onScreen = camera:WorldToViewportPoint(head.Position)
+                if onScreen then
+                    local dist = (Vector2.new(pos.X, pos.Y) - center).Magnitude
+                    if dist < minScore then
+                        minScore = dist
+                        closest = head
                     end
                 end
             end
         end
     end
+    return closest
+end
 
-    _G.CurrentTarget = closest
-    if closest then
-        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
+-- MAIN PERFORMANCE LOOP
+runService.Heartbeat:Connect(function()
+    if not isEnabled then return end
+    
+    -- Update FOV Circle Position
+    fovCircle.Position = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    fovCircle.Radius = fovRadius
+    
+    local target = getTarget()
+    if target then
+        -- Use a cleaner Lerp that doesn't fight the game engine
+        local lookAt = CFrame.new(camera.CFrame.Position, target.Position)
+        camera.CFrame = camera.CFrame:Lerp(lookAt, smoothing)
     end
-end)
-
-toggleBtn.MouseButton1Click:Connect(function()
-    _G.isEnabled = not _G.isEnabled
-    toggleBtn.Text = _G.isEnabled and "ON" or "OFF"
-    toggleBtn.BackgroundColor3 = _G.isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-    fovCircle.Visible = _G.isEnabled
 end)
