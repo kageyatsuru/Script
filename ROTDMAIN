@@ -1,4 +1,4 @@
--- [[ ULTIMATE V12.3: MASTER MOBILE EDITION ]]
+-- [[ ULTIMATE V12.4: DUAL-PANE HORIZONTAL LAYOUT ]]
 
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
@@ -6,7 +6,7 @@ local runService = game:GetService("RunService")
 local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
--- [[ SHARED CONFIG ]]
+-- [[ CONFIG ]]
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
 local wallCheckEnabled = false 
@@ -33,18 +33,18 @@ table.sort(weapons)
 
 -- [[ UI SETUP ]]
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name, screenGui.ResetOnSpawn = "V12_Master_Mobile", false
+screenGui.Name, screenGui.ResetOnSpawn = "V12_Horizontal", false
 
--- HIDE / SHOW BUTTON (Top Right)
 local hideBtn = Instance.new("TextButton", screenGui)
-hideBtn.Size, hideBtn.Position = UDim2.new(0, 50, 0, 50), UDim2.new(0.95, -50, 0.05, 0)
-hideBtn.BackgroundColor3, hideBtn.Text = Color3.fromRGB(40, 40, 40), "HIDE"
+hideBtn.Size, hideBtn.Position = UDim2.new(0, 60, 0, 30), UDim2.new(0.5, 140, 0.2, -40)
+hideBtn.BackgroundColor3, hideBtn.Text = Color3.fromRGB(45, 45, 45), "HIDE"
 hideBtn.TextColor3, hideBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
 Instance.new("UICorner", hideBtn)
 
+-- MAIN CONTAINER (Wider for two columns)
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size, mainFrame.Position = UDim2.new(0, 240, 0, 560), UDim2.new(0.5, -120, 0.1, 0)
-mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(25, 25, 25), true, true
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 400, 0, 260), UDim2.new(0.5, -200, 0.2, 0)
+mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(20, 20, 20), true, true
 Instance.new("UICorner", mainFrame)
 
 hideBtn.MouseButton1Click:Connect(function()
@@ -52,81 +52,20 @@ hideBtn.MouseButton1Click:Connect(function()
     hideBtn.Text = mainFrame.Visible and "HIDE" or "SHOW"
 end)
 
--- [[ WEAPON LIST ]]
-local weaponBtn = Instance.new("TextButton", mainFrame)
-weaponBtn.Size, weaponBtn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, 240)
-weaponBtn.BackgroundColor3, weaponBtn.Text = Color3.fromRGB(80, 40, 150), "WEAPON: " .. weapon:upper()
-weaponBtn.TextColor3, weaponBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
-Instance.new("UICorner", weaponBtn)
+-- [[ LEFT PANE: SLIDERS & WEAPONS ]]
+local leftPane = Instance.new("Frame", mainFrame)
+leftPane.Size, leftPane.Position = UDim2.new(0.48, 0, 0.9, 0), UDim2.new(0.02, 0, 0.05, 0)
+leftPane.BackgroundTransparency = 1
 
-local weaponMenu = Instance.new("ScrollingFrame", mainFrame)
-weaponMenu.Size, weaponMenu.Position = UDim2.new(0.9, 0, 0, 120), UDim2.new(0.05, 0, 0, 280)
-weaponMenu.BackgroundColor3, weaponMenu.Visible = Color3.fromRGB(35, 35, 35), false
-weaponMenu.CanvasSize = UDim2.new(0, 0, 0, #weapons * 35)
-Instance.new("UIListLayout", weaponMenu).Padding = UDim.new(0, 5)
-
-for _, wName in ipairs(weapons) do
-    local btn = Instance.new("TextButton", weaponMenu)
-    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 30), wName
-    btn.BackgroundColor3, btn.TextColor3 = Color3.fromRGB(50, 50, 50), Color3.new(1, 1, 1)
-    Instance.new("UICorner", btn)
-    btn.MouseButton1Click:Connect(function()
-        weapon = wName
-        weaponBtn.Text = "WEAPON: " .. weapon:upper()
-        weaponMenu.Visible = false
-    end)
-end
-weaponBtn.MouseButton1Click:Connect(function() weaponMenu.Visible = not weaponMenu.Visible end)
-
--- [[ TOGGLE FACTORY ]]
-local function createToggle(name, pos, callback)
-    local btn = Instance.new("TextButton", mainFrame)
-    btn.Size, btn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, pos)
-    btn.BackgroundColor3, btn.Text = Color3.fromRGB(200, 50, 50), name .. ": OFF"
-    btn.TextColor3, btn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
-    Instance.new("UICorner", btn)
-    btn.MouseButton1Click:Connect(function() callback(btn) end)
-end
-
-createToggle("SILENT AIM", 40, function(b)
-    _G.SilentAimEnabled = not _G.SilentAimEnabled
-    b.Text = "SILENT AIM: " .. (_G.SilentAimEnabled and "ON" or "OFF")
-    b.BackgroundColor3 = _G.SilentAimEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-end)
-
-createToggle("AIMBOT", 80, function(b)
-    _G.AimbotEnabled = not _G.AimbotEnabled
-    b.Text = "AIMBOT: " .. (_G.AimbotEnabled and "ON" or "OFF")
-    b.BackgroundColor3 = _G.AimbotEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-end)
-
-createToggle("WALLCHECK", 120, function(b)
-    wallCheckEnabled = not wallCheckEnabled
-    b.Text = "WALLCHECK: " .. (wallCheckEnabled and "ON" or "OFF")
-    b.BackgroundColor3 = wallCheckEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
-end)
-
-createToggle("MODE: CROSSHAIR", 160, function(b)
-    aimMode = (aimMode == "Crosshair") and "Distance" or "Crosshair"
-    b.Text = "MODE: " .. aimMode:upper()
-    b.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
-end)
-
-createToggle("TARGET: HEAD", 200, function(b)
-    targetBone = (targetBone == "Head") and "Torso" or "Head"
-    b.Text = "TARGET: " .. targetBone:upper()
-    b.BackgroundColor3 = Color3.fromRGB(65, 65, 65)
-end)
-
--- [[ SLIDER FACTORY ]]
 local function createSlider(name, pos, min, max, start, callback)
-    local lab = Instance.new("TextLabel", mainFrame)
-    lab.Size, lab.Position, lab.Text = UDim2.new(1, 0, 0, 20), UDim2.new(0, 0, 0, pos), name .. ": " .. start
-    lab.TextColor3, lab.BackgroundTransparency = Color3.new(1,1,1), 1
-    local bar = Instance.new("Frame", mainFrame)
-    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(0.8, 0, 0, 10), UDim2.new(0.1, 0, 0, pos + 20), Color3.fromRGB(50,50,50)
+    local lab = Instance.new("TextLabel", leftPane)
+    lab.Size, lab.Position, lab.Text = UDim2.new(1, 0, 0, 15), UDim2.new(0, 0, 0, pos), name .. ": " .. start
+    lab.TextColor3, lab.BackgroundTransparency, lab.TextXAlignment = Color3.new(1,1,1), 1, Enum.TextXAlignment.Left
+    
+    local bar = Instance.new("Frame", leftPane)
+    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(1, 0, 0, 8), UDim2.new(0, 0, 0, pos + 18), Color3.fromRGB(50,50,50)
     local fill = Instance.new("Frame", bar)
-    fill.Size, fill.BackgroundColor3 = UDim2.new((start-min)/(max-min), 0, 1, 0), Color3.fromRGB(0, 150, 255)
+    fill.Size, fill.BackgroundColor3 = UDim2.new((start-min)/(max-min), 0, 1, 0), Color3.fromRGB(0, 160, 255)
     
     bar.InputBegan:Connect(function(input)
         if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -141,11 +80,75 @@ local function createSlider(name, pos, min, max, start, callback)
     end)
 end
 
-createSlider("Range", 410, 50, 1500, globalRange, function(v) globalRange = v end)
-createSlider("FOV", 460, 30, 800, fovRadius, function(v) fovRadius = v end)
-createSlider("Smooth", 510, 1, 10, smoothing*10, function(v) smoothing = v/10 end)
+createSlider("Range", 0, 50, 1500, globalRange, function(v) globalRange = v end)
+createSlider("FOV", 40, 30, 800, fovRadius, function(v) fovRadius = v end)
+createSlider("Smooth", 80, 1, 10, smoothing*10, function(v) smoothing = v/10 end)
 
--- [[ ENGINE ]]
+local weaponBtn = Instance.new("TextButton", leftPane)
+weaponBtn.Size, weaponBtn.Position = UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, 130)
+weaponBtn.BackgroundColor3, weaponBtn.Text = Color3.fromRGB(70, 50, 150), "WEAPON: " .. weapon:upper()
+weaponBtn.TextColor3, weaponBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
+Instance.new("UICorner", weaponBtn)
+
+local weaponList = Instance.new("ScrollingFrame", leftPane)
+weaponList.Size, weaponList.Position = UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 165)
+weaponList.BackgroundColor3, weaponList.Visible = Color3.fromRGB(30, 30, 30), true
+weaponList.CanvasSize = UDim2.new(0, 0, 0, #weapons * 25)
+Instance.new("UIListLayout", weaponList).Padding = UDim.new(0, 2)
+
+for _, wName in ipairs(weapons) do
+    local btn = Instance.new("TextButton", weaponList)
+    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 22), wName
+    btn.BackgroundColor3, btn.TextColor3 = Color3.fromRGB(45, 45, 45), Color3.new(1, 1, 1)
+    btn.MouseButton1Click:Connect(function() weapon = wName; weaponBtn.Text = "WEAPON: " .. weapon:upper() end)
+end
+
+-- [[ RIGHT PANE: TOGGLES ]]
+local rightPane = Instance.new("Frame", mainFrame)
+rightPane.Size, rightPane.Position = UDim2.new(0.48, 0, 0.9, 0), UDim2.new(0.52, 0, 0.05, 0)
+rightPane.BackgroundTransparency = 1
+Instance.new("UIListLayout", rightPane).Padding = UDim.new(0, 8)
+
+local function createToggle(name, callback)
+    local btn = Instance.new("TextButton", rightPane)
+    btn.Size = UDim2.new(1, 0, 0, 40)
+    btn.BackgroundColor3, btn.Text = Color3.fromRGB(200, 50, 50), name .. ": OFF"
+    btn.TextColor3, btn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function() callback(btn) end)
+end
+
+createToggle("SILENT AIM", function(b)
+    _G.SilentAimEnabled = not _G.SilentAimEnabled
+    b.Text = "SILENT AIM: " .. (_G.SilentAimEnabled and "ON" or "OFF")
+    b.BackgroundColor3 = _G.SilentAimEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+createToggle("AIMBOT", function(b)
+    _G.AimbotEnabled = not _G.AimbotEnabled
+    b.Text = "AIMBOT: " .. (_G.AimbotEnabled and "ON" or "OFF")
+    b.BackgroundColor3 = _G.AimbotEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+createToggle("WALLCHECK", function(b)
+    wallCheckEnabled = not wallCheckEnabled
+    b.Text = "WALLCHECK: " .. (wallCheckEnabled and "ON" or "OFF")
+    b.BackgroundColor3 = wallCheckEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+createToggle("MODE: CROSSHAIR", function(b)
+    aimMode = (aimMode == "Crosshair") and "Distance" or "Crosshair"
+    b.Text = "MODE: " .. aimMode:upper()
+    b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+end)
+
+createToggle("TARGET: HEAD", function(b)
+    targetBone = (targetBone == "Head") and "Torso" or "Head"
+    b.Text = "TARGET: " .. targetBone:upper()
+    b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+end)
+
+-- [[ ENGINE LOOP ]]
 runService.RenderStepped:Connect(function(delta)
     if not (_G.SilentAimEnabled or _G.AimbotEnabled) then return end
     cd = math.max(0, cd - delta)
