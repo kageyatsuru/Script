@@ -1,4 +1,4 @@
--- [[ ULTIMATE V12.4: DUAL-PANE HORIZONTAL LAYOUT ]]
+-- [[ ULTIMATE V12.5: DUAL-PANE + FIXED SCREEN HIDE BUTTON ]]
 
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
@@ -33,17 +33,18 @@ table.sort(weapons)
 
 -- [[ UI SETUP ]]
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name, screenGui.ResetOnSpawn = "V12_Horizontal", false
+screenGui.Name, screenGui.ResetOnSpawn = "V12_DualPane_Fixed", false
 
+-- FIXED HIDE BUTTON (Top Right of Screen)
 local hideBtn = Instance.new("TextButton", screenGui)
-hideBtn.Size, hideBtn.Position = UDim2.new(0, 60, 0, 30), UDim2.new(0.5, 140, 0.2, -40)
-hideBtn.BackgroundColor3, hideBtn.Text = Color3.fromRGB(45, 45, 45), "HIDE"
+hideBtn.Size, hideBtn.Position = UDim2.new(0, 55, 0, 55), UDim2.new(0.97, -55, 0.05, 0)
+hideBtn.BackgroundColor3, hideBtn.Text = Color3.fromRGB(40, 40, 40), "HIDE"
 hideBtn.TextColor3, hideBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
 Instance.new("UICorner", hideBtn)
 
--- MAIN CONTAINER (Wider for two columns)
+-- MAIN CONTAINER
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size, mainFrame.Position = UDim2.new(0, 400, 0, 260), UDim2.new(0.5, -200, 0.2, 0)
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 420, 0, 260), UDim2.new(0.5, -210, 0.3, 0)
 mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(20, 20, 20), true, true
 Instance.new("UICorner", mainFrame)
 
@@ -81,33 +82,38 @@ local function createSlider(name, pos, min, max, start, callback)
 end
 
 createSlider("Range", 0, 50, 1500, globalRange, function(v) globalRange = v end)
-createSlider("FOV", 40, 30, 800, fovRadius, function(v) fovRadius = v end)
-createSlider("Smooth", 80, 1, 10, smoothing*10, function(v) smoothing = v/10 end)
+createSlider("FOV", 45, 30, 800, fovRadius, function(v) fovRadius = v end)
+createSlider("Smooth", 90, 1, 10, smoothing*10, function(v) smoothing = v/10 end)
 
-local weaponBtn = Instance.new("TextButton", leftPane)
-weaponBtn.Size, weaponBtn.Position = UDim2.new(1, 0, 0, 30), UDim2.new(0, 0, 0, 130)
-weaponBtn.BackgroundColor3, weaponBtn.Text = Color3.fromRGB(70, 50, 150), "WEAPON: " .. weapon:upper()
-weaponBtn.TextColor3, weaponBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
-Instance.new("UICorner", weaponBtn)
+local weaponDisplay = Instance.new("TextLabel", leftPane)
+weaponDisplay.Size, weaponDisplay.Position = UDim2.new(1, 0, 0, 25), UDim2.new(0, 0, 0, 135)
+weaponDisplay.Text = "WEAPON: " .. weapon:upper()
+weaponDisplay.TextColor3, weaponDisplay.Font, weaponDisplay.BackgroundTransparency = Color3.fromRGB(150, 100, 255), Enum.Font.GothamBold, 1
 
 local weaponList = Instance.new("ScrollingFrame", leftPane)
-weaponList.Size, weaponList.Position = UDim2.new(1, 0, 0, 70), UDim2.new(0, 0, 0, 165)
+weaponList.Size, weaponList.Position = UDim2.new(1, 0, 0, 75), UDim2.new(0, 0, 0, 160)
 weaponList.BackgroundColor3, weaponList.Visible = Color3.fromRGB(30, 30, 30), true
-weaponList.CanvasSize = UDim2.new(0, 0, 0, #weapons * 25)
-Instance.new("UIListLayout", weaponList).Padding = UDim.new(0, 2)
+weaponList.CanvasSize = UDim2.new(0, 0, 0, #weapons * 28)
+weaponList.ScrollBarThickness = 4
+Instance.new("UIListLayout", weaponList).Padding = UDim.new(0, 3)
 
 for _, wName in ipairs(weapons) do
     local btn = Instance.new("TextButton", weaponList)
-    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 22), wName
+    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 25), wName
     btn.BackgroundColor3, btn.TextColor3 = Color3.fromRGB(45, 45, 45), Color3.new(1, 1, 1)
-    btn.MouseButton1Click:Connect(function() weapon = wName; weaponBtn.Text = "WEAPON: " .. weapon:upper() end)
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function() 
+        weapon = wName; 
+        weaponDisplay.Text = "WEAPON: " .. weapon:upper() 
+    end)
 end
 
 -- [[ RIGHT PANE: TOGGLES ]]
 local rightPane = Instance.new("Frame", mainFrame)
 rightPane.Size, rightPane.Position = UDim2.new(0.48, 0, 0.9, 0), UDim2.new(0.52, 0, 0.05, 0)
 rightPane.BackgroundTransparency = 1
-Instance.new("UIListLayout", rightPane).Padding = UDim.new(0, 8)
+local layout = Instance.new("UIListLayout", rightPane)
+layout.Padding = UDim.new(0, 8)
 
 local function createToggle(name, callback)
     local btn = Instance.new("TextButton", rightPane)
