@@ -1,104 +1,80 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "ULTIMATE V12.7: AMETHYST MASTER",
-   LoadingTitle = "Weapon Database Loading...",
-   LoadingSubtitle = "Scanning Prefabs",
+   Name = "ULTIMATE V12.7",
+   LoadingTitle = "Ex3cuting..",
+   LoadingSubtitle = "Made by Ori",
    Theme = "Amethyst",
    ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" }
 })
 
 -- [[ SHARED CONFIG ]]
+local replicatedStorage = game:GetService("ReplicatedStorage")
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
+_G.AutoReload = false
 _G.ShowFOV = false
-local weapon = "ak47" -- Default
+
+local weapon = "ak47"
 local silentFOV, silentDist = 150, 600
 local aimbotFOV, aimbotDist = 100, 400
 local smoothing = 0.5
 local FIRE_RATE = 0.1
 local cd = 0
+local lastBuy = 0
 
--- [[ THE CORRECT WEAPON SCANNER ]]
--- This looks into ReplicatedStorage to find every gun the game has
-local allWeapons = {}
-local prefabs = game:GetService("ReplicatedStorage"):FindFirstChild("Prefabs")
-if prefabs and prefabs:FindFirstChild("Items") then
+-- [[ YOUR SPECIFIC AMMO/ITEM IDs ]]
+local ammoIDs = {
+    ["p250"] = "#1", ["tec-9"] = "#976", ["XM1014"] = "#9", ["MP5"] = "#40", 
+    ["Sawed-off"] = "#70", ["MP7"] = "#147", ["AK-47"] = "#322", ["M4A4"] = "#193", 
+    ["Flamethrower"] = "#939", ["AWP"] = "#367", ["Minigun"] = "#416", 
+    ["Tactical Bow"] = "#797", ["Dual P250"] = "#886"
+}
+
+-- [[ WEAPON COLLECTION LOGIC ]]
+local weapons = {}
+local prefabs = replicatedStorage:FindFirstChild("Prefabs")
+if prefabs and prefabs.Items then
     for _, v in pairs(prefabs.Items:GetChildren()) do
-        -- The specific check we used to differentiate guns from other items
-        if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") or v:FindFirstChild("Handle") then
-            table.insert(allWeapons, v.Name)
+        if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") then
+            table.insert(weapons, v.Name)
         end
     end
 end
-table.sort(allWeapons)
+table.sort(weapons)
 
 -- [[ TABS ]]
-local SilentTab = Window:CreateTab("Silent Aim", 4483362458)
-local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+local CombatTab = Window:CreateTab("Combat", 4483362458)
+local QOLTab = Window:CreateTab("QOL", 4483345998)
 local VisualsTab = Window:CreateTab("Visuals", 4483345998)
-local ConfigTab = Window:CreateTab("Weaponry", 4483345998)
+local WeaponTab = Window:CreateTab("Weaponry", 4483345998)
 
--- [[ WEAPONRY TAB ]]
-ConfigTab:CreateSection("Global Weapon Database")
-
-local WeaponDropdown = ConfigTab:CreateDropdown({
-   Name = "Select Target Weapon",
-   Options = allWeapons,
-   CurrentOption = {weapon},
-   MultipleOptions = false,
-   Callback = function(Option) 
-       weapon = Option[1] 
-       Rayfield:Notify({Title = "Weapon Selected", Content = "Silent Aim now targeting: " .. weapon, Duration = 2})
-   end,
-})
-
--- [[ COMBAT TABS (Independent Logic) ]]
-SilentTab:CreateToggle({
-   Name = "Enable Silent Aim",
+-- [[ QOL TAB - WITH STATUS ]]
+QOLTab:CreateSection("Automation")
+QOLTab:CreateToggle({
+   Name = "Auto-Buy Ammo",
    CurrentValue = false,
-   Callback = function(Value) _G.SilentAimEnabled = Value end,
-})
-SilentTab:CreateSlider({
-   Name = "Silent FOV",
-   Range = {10, 800},
-   Increment = 10,
-   CurrentValue = 150,
-   Callback = function(v) silentFOV = v end,
-})
-SilentTab:CreateSlider({
-   Name = "Silent Distance",
-   Range = {50, 2000},
-   Increment = 50,
-   CurrentValue = 600,
-   Callback = function(v) silentDist = v end,
+   Callback = function(v) _G.AutoReload = v end,
 })
 
-AimbotTab:CreateToggle({
-   Name = "Enable Aimbot (CamLock)",
-   CurrentValue = false,
-   Callback = function(Value) _G.AimbotEnabled = Value end,
-})
-AimbotTab:CreateSlider({
-   Name = "Aimbot FOV",
-   Range = {10, 500},
-   Increment = 5,
-   CurrentValue = 100,
-   Callback = function(v) aimbotFOV = v end,
-})
+local BuyStatus = QOLTab:CreateLabel("Status: Idle") -- The Status Label
 
-VisualsTab:CreateToggle({
-   Name = "Show FOV Circles",
-   CurrentValue = false,
-   Callback = function(Value) _G.ShowFOV = Value end,
-})
+-- [[ COMBAT TAB ]]
+CombatTab:CreateSection("— Silent Aim —")
+CombatTab:CreateToggle({Name = "Enable Silent Aim", CurrentValue = false, Callback = function(v) _G.SilentAimEnabled = v end})
+CombatTab:CreateSlider({Name = "Silent FOV", Range = {10, 800}, Increment = 10, CurrentValue = 150, Callback = function(v) silentFOV = v end})
+
+CombatTab:CreateSection("— Aimbot —")
+CombatTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) _G.AimbotEnabled = v end})
+CombatTab:CreateSlider({Name = "Smoothness", Range = {1, 10}, Increment = 1, CurrentValue = 5, Callback = function(v) smoothing = v / 10 end})
+
+-- [[ WEAPONRY & VISUALS ]]
+WeaponTab:CreateDropdown({Name = "Select Active Weapon", Options = weapons, CurrentOption = {weapons[1] or "ak47"}, Callback = function(Option) weapon = Option[1] end})
+VisualsTab:CreateToggle({Name = "Show FOV Circles", CurrentValue = false, Callback = function(v) _G.ShowFOV = v end})
 
 -- [[ ENGINE LOOP ]]
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local replicatedStorage = game:GetService("ReplicatedStorage")
-
--- FOV Drawing
 local SilentCircle = Drawing.new("Circle")
 SilentCircle.Color, SilentCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
 local AimCircle = Drawing.new("Circle")
@@ -111,11 +87,31 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
 
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- AUTO RELOAD LOGIC WITH STATUS UPDATES
+    if _G.AutoReload and tick() - lastBuy > 3 then
+        lastBuy = tick()
+        task.spawn(function()
+            for name, id in pairs(ammoIDs) do
+                if not _G.AutoReload then break end
+                BuyStatus:Set("Buying Ammo: " .. name)
+                pcall(function()
+                    replicatedStorage.Library.RemotesManager.ShopService:InvokeServer(
+                        "buyammo",
+                        { StoreObj = workspace.Interactables.Shop_Sundays },
+                        id
+                    )
+                end)
+                task.wait(0.1) -- Small delay between each ID to be safe
+            end
+            BuyStatus:Set("Status: Waiting for Cooldown...")
+        end)
+    elseif not _G.AutoReload then
+        BuyStatus:Set("Status: Disabled")
+    end
+
     cd = math.max(0, cd - delta)
-    
-    -- IMPORTANT: This ensures the Silent Aim only works when you hold the SELECTED weapon
     local gun = char:FindFirstChild(weapon)
-    
     local entities = workspace:FindFirstChild("Entity")
     if not entities then return end
 
@@ -125,7 +121,6 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
     for _, v in pairs(entities:GetChildren()) do
         local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
         local h = v:FindFirstChildOfClass("Humanoid") or v:FindFirstChild("Zombie")
-        
         if t and h and h.Health > 0 then
             local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
             local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
@@ -144,17 +139,12 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
         camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, aTarget.Position), smoothing)
     end
     
-    -- Silent Aim Execution
     if sTarget and _G.SilentAimEnabled and gun and cd <= 0 then
         replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
-            ["ShotPoint"] = char.HumanoidRootPart.Position, 
-            ["Direction"] = (sTarget.Position - char.HumanoidRootPart.Position).Unit, 
-            ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
-            ["TracerColor"] = Color3.new(0.6, 0.4, 1),
-            ["ShotId"] = math.random(1, 9999), 
-            ["HitInfoList"] = {{["Part"] = sTarget, ["Position"] = sTarget.Position, ["Normal"] = Vector3.new(0,1,0)}},
-            ["ShotOrigin"] = gun.Handle.BulletOrigin, 
-            ["Victims"] = {{["Humanoid"] = sTarget.Parent:FindFirstChildOfClass("Humanoid"), ["Object"] = sTarget}},
+            ["ShotPoint"] = char.HumanoidRootPart.Position, ["Direction"] = (sTarget.Position - char.HumanoidRootPart.Position).Unit, 
+            ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, ["TracerColor"] = Color3.new(0.6, 0.4, 1),
+            ["ShotId"] = math.random(1, 9999), ["HitInfoList"] = {{["Part"] = sTarget, ["Position"] = sTarget.Position, ["Normal"] = VectorVector3.new(0,1,0)}},
+            ["ShotOrigin"] = gun.Handle.BulletOrigin, ["Victims"] = {{["Humanoid"] = sTarget.Parent:FindFirstChildOfClass("Humanoid"), ["Object"] = sTarget}},
             ["TargetPoints"] = {sTarget.Position}
         })
         cd = FIRE_RATE
