@@ -3,95 +3,76 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
    Name = "ULTIMATE V12.7: AMETHYST MASTER",
    LoadingTitle = "V12.7 Mobile Reborn",
-   LoadingSubtitle = "by Ori",
-   Theme = "Amethyst", -- This changes the colors to purple/dark
-   ConfigurationSaving = {
-      Enabled = true,
-      FolderName = "V12_Configs",
-      FileName = "AmethystMaster"
-   },
-   KeySystem = false 
+   LoadingSubtitle = "Independent Aim Logic",
+   Theme = "Amethyst",
+   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "AmethystMaster" }
 })
 
 -- [[ SHARED CONFIG ]]
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
-_G.AutoBuyAmmo = false
-local wallCheckEnabled = false
-local targetBone = "Head"
 local weapon = "ak47"
 local smoothing = 0.5
 local globalRange = 600
 local fovRadius = 150
 local FIRE_RATE = 0.1
 local cd = 0
-local lastBuy = 0
 
 -- [[ TABS ]]
-local CombatTab = Window:CreateTab("Combat", 4483362458) 
-local UtilityTab = Window:CreateTab("Utility", 4483345998)
+local CombatTab = Window:CreateTab("Combat", 4483362458)
+local SettingsTab = Window:CreateTab("Settings", 4483345998)
 
--- [[ COMBAT SECTION ]]
-CombatTab:CreateSection("Targeting")
+-- [[ COMBAT TAB ]]
+CombatTab:CreateSection("Silent Aim (Direct Hit)")
 
 CombatTab:CreateToggle({
-   Name = "Silent Aim",
+   Name = "Enable Silent Aim",
    CurrentValue = false,
    Callback = function(Value) _G.SilentAimEnabled = Value end,
 })
 
+CombatTab:CreateSection("Aimbot (Camera Lock)")
+
 CombatTab:CreateToggle({
-   Name = "Aimbot (CamLock)",
+   Name = "Enable Aimbot",
    CurrentValue = false,
    Callback = function(Value) _G.AimbotEnabled = Value end,
 })
 
 CombatTab:CreateSlider({
-   Name = "Smoothing",
+   Name = "Camera Smoothing",
    Range = {1, 10},
    Increment = 1,
-   Suffix = "Smooth",
    CurrentValue = 5,
    Callback = function(Value) smoothing = Value / 10 end,
 })
 
-CombatTab:CreateSlider({
-   Name = "FOV Radius",
-   Range = {30, 800},
-   Increment = 10,
-   Suffix = "px",
-   CurrentValue = 150,
-   Callback = function(Value) fovRadius = Value end,
-})
+-- [[ SETTINGS TAB ]]
+SettingsTab:CreateSection("Weapon Selection")
 
-CombatTab:CreateDropdown({
-   Name = "Target Bone",
-   Options = {"Head", "HumanoidRootPart"},
-   CurrentOption = {"Head"},
+-- This creates a dropdown that you can update
+local WeaponDropdown = SettingsTab:CreateDropdown({
+   Name = "Select Active Weapon",
+   Options = {"ak47", "p250", "m4a4", "awp"}, -- Default starters
+   CurrentOption = {"ak47"},
    MultipleOptions = false,
-   Callback = function(Option) targetBone = Option[1] end,
+   Callback = function(Option) weapon = Option[1] end,
 })
 
--- [[ UTILITY SECTION ]]
-UtilityTab:CreateSection("Automation")
-
-UtilityTab:CreateToggle({
-   Name = "Auto Buy Ammo",
-   CurrentValue = false,
-   Callback = function(Value) _G.AutoBuyAmmo = Value end,
-})
-
-UtilityTab:CreateInput({
-   Name = "Weapon Name",
-   PlaceholderText = "e.g. ak47",
-   RemoveTextAfterFocusLost = false,
-   Callback = function(Text) weapon = Text end,
-})
-
-UtilityTab:CreateToggle({
-   Name = "Wallcheck",
-   CurrentValue = false,
-   Callback = function(Value) wallCheckEnabled = Value end,
+SettingsTab:CreateButton({
+   Name = "Refresh Weapon List",
+   Callback = function()
+       local foundWeapons = {}
+       -- Scan Character
+       for _, item in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
+           if item:IsA("Tool") then table.insert(foundWeapons, item.Name) end
+       end
+       -- Scan Backpack
+       for _, item in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+           table.insert(foundWeapons, item.Name)
+       end
+       WeaponDropdown:Refresh(foundWeapons)
+   end,
 })
 
 -- [[ ENGINE LOOP ]]
@@ -103,58 +84,44 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
-    -- Auto Buy Logic (Async for no lag)
-    if _G.AutoBuyAmmo and tick() - lastBuy > 3 then
-        lastBuy = tick()
-        task.spawn(function()
-            local ammoID = "#322" -- Default AK; can be expanded if needed
-            pcall(function()
-                replicatedStorage.Library.RemotesManager.ShopService:InvokeServer(
-                    "buyammo",
-                    { StoreObj = workspace.Interactables.Shop_Sundays },
-                    ammoID
-                )
-            end)
-        end)
-    end
-
-    if not (_G.SilentAimEnabled or _G.AimbotEnabled) then return end
     cd = math.max(0, cd - delta)
     local gun = char:FindFirstChild(weapon)
     
+    -- TARGETING LOGIC
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     local closest, minScore, targetHum = nil, math.huge, nil
     local entities = workspace:FindFirstChild("Entity")
     
     if entities then
         for _, v in pairs(entities:GetChildren()) do
-            local t = v:FindFirstChild(targetBone)
+            local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
             local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
             if t and h and h.Health > 0 then
-                local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
-                if dist < globalRange then
-                    local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
-                    if onScreen then
-                        local score = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                        if score < fovRadius and score < minScore then
-                            minScore, closest, targetHum = score, t, h
-                        end
+                local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
+                if onScreen then
+                    local score = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                    if score < fovRadius and score < minScore then
+                        minScore, closest, targetHum = score, t, h
                     end
                 end
             end
         end
     end
 
+    -- INDEPENDENT EXECUTION
     if closest then
+        -- 1. Aimbot Logic (Only moves camera)
         if _G.AimbotEnabled then
             camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
         end
+        
+        -- 2. Silent Aim Logic (Only fires remotes)
         if _G.SilentAimEnabled and gun and cd <= 0 then
             replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
                 ["ShotPoint"] = char.HumanoidRootPart.Position, 
                 ["Direction"] = (closest.Position - char.HumanoidRootPart.Position).Unit, 
                 ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
-                ["TracerColor"] = Color3.new(0.6, 0.4, 1), -- Amethyst Tracer
+                ["TracerColor"] = Color3.new(0.6, 0.4, 1),
                 ["ShotId"] = math.random(1, 999), 
                 ["HitInfoList"] = {{["Part"] = closest, ["Position"] = closest.Position, ["Normal"] = Vector3.new(0,1,0)}},
                 ["ShotOrigin"] = gun.Handle.BulletOrigin, 
@@ -165,9 +132,3 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
         end
     end
 end)
-
-Rayfield:Notify({
-   Title = "V12.7 Amethyst Ready",
-   Content = "All systems operational.",
-   Duration = 4,
-})
