@@ -2,77 +2,95 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "ULTIMATE V12.7: AMETHYST MASTER",
-   LoadingTitle = "V12.7 Mobile Reborn",
-   LoadingSubtitle = "Independent Aim Logic",
+   LoadingTitle = "Weapon Database Loading...",
+   LoadingSubtitle = "Scanning Prefabs",
    Theme = "Amethyst",
-   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "AmethystMaster" }
+   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" }
 })
 
 -- [[ SHARED CONFIG ]]
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
-local weapon = "ak47"
+_G.ShowFOV = false
+local weapon = "ak47" -- Default
+local silentFOV, silentDist = 150, 600
+local aimbotFOV, aimbotDist = 100, 400
 local smoothing = 0.5
-local globalRange = 600
-local fovRadius = 150
 local FIRE_RATE = 0.1
 local cd = 0
 
+-- [[ THE CORRECT WEAPON SCANNER ]]
+-- This looks into ReplicatedStorage to find every gun the game has
+local allWeapons = {}
+local prefabs = game:GetService("ReplicatedStorage"):FindFirstChild("Prefabs")
+if prefabs and prefabs:FindFirstChild("Items") then
+    for _, v in pairs(prefabs.Items:GetChildren()) do
+        -- The specific check we used to differentiate guns from other items
+        if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") or v:FindFirstChild("Handle") then
+            table.insert(allWeapons, v.Name)
+        end
+    end
+end
+table.sort(allWeapons)
+
 -- [[ TABS ]]
-local CombatTab = Window:CreateTab("Combat", 4483362458)
-local SettingsTab = Window:CreateTab("Settings", 4483345998)
+local SilentTab = Window:CreateTab("Silent Aim", 4483362458)
+local AimbotTab = Window:CreateTab("Aimbot", 4483362458)
+local VisualsTab = Window:CreateTab("Visuals", 4483345998)
+local ConfigTab = Window:CreateTab("Weaponry", 4483345998)
 
--- [[ COMBAT TAB ]]
-CombatTab:CreateSection("Silent Aim (Direct Hit)")
+-- [[ WEAPONRY TAB ]]
+ConfigTab:CreateSection("Global Weapon Database")
 
-CombatTab:CreateToggle({
+local WeaponDropdown = ConfigTab:CreateDropdown({
+   Name = "Select Target Weapon",
+   Options = allWeapons,
+   CurrentOption = {weapon},
+   MultipleOptions = false,
+   Callback = function(Option) 
+       weapon = Option[1] 
+       Rayfield:Notify({Title = "Weapon Selected", Content = "Silent Aim now targeting: " .. weapon, Duration = 2})
+   end,
+})
+
+-- [[ COMBAT TABS (Independent Logic) ]]
+SilentTab:CreateToggle({
    Name = "Enable Silent Aim",
    CurrentValue = false,
    Callback = function(Value) _G.SilentAimEnabled = Value end,
 })
+SilentTab:CreateSlider({
+   Name = "Silent FOV",
+   Range = {10, 800},
+   Increment = 10,
+   CurrentValue = 150,
+   Callback = function(v) silentFOV = v end,
+})
+SilentTab:CreateSlider({
+   Name = "Silent Distance",
+   Range = {50, 2000},
+   Increment = 50,
+   CurrentValue = 600,
+   Callback = function(v) silentDist = v end,
+})
 
-CombatTab:CreateSection("Aimbot (Camera Lock)")
-
-CombatTab:CreateToggle({
-   Name = "Enable Aimbot",
+AimbotTab:CreateToggle({
+   Name = "Enable Aimbot (CamLock)",
    CurrentValue = false,
    Callback = function(Value) _G.AimbotEnabled = Value end,
 })
-
-CombatTab:CreateSlider({
-   Name = "Camera Smoothing",
-   Range = {1, 10},
-   Increment = 1,
-   CurrentValue = 5,
-   Callback = function(Value) smoothing = Value / 10 end,
+AimbotTab:CreateSlider({
+   Name = "Aimbot FOV",
+   Range = {10, 500},
+   Increment = 5,
+   CurrentValue = 100,
+   Callback = function(v) aimbotFOV = v end,
 })
 
--- [[ SETTINGS TAB ]]
-SettingsTab:CreateSection("Weapon Selection")
-
--- This creates a dropdown that you can update
-local WeaponDropdown = SettingsTab:CreateDropdown({
-   Name = "Select Active Weapon",
-   Options = {"ak47", "p250", "m4a4", "awp"}, -- Default starters
-   CurrentOption = {"ak47"},
-   MultipleOptions = false,
-   Callback = function(Option) weapon = Option[1] end,
-})
-
-SettingsTab:CreateButton({
-   Name = "Refresh Weapon List",
-   Callback = function()
-       local foundWeapons = {}
-       -- Scan Character
-       for _, item in pairs(game.Players.LocalPlayer.Character:GetChildren()) do
-           if item:IsA("Tool") then table.insert(foundWeapons, item.Name) end
-       end
-       -- Scan Backpack
-       for _, item in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
-           table.insert(foundWeapons, item.Name)
-       end
-       WeaponDropdown:Refresh(foundWeapons)
-   end,
+VisualsTab:CreateToggle({
+   Name = "Show FOV Circles",
+   CurrentValue = false,
+   Callback = function(Value) _G.ShowFOV = Value end,
 })
 
 -- [[ ENGINE LOOP ]]
@@ -80,55 +98,65 @@ local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local replicatedStorage = game:GetService("ReplicatedStorage")
 
+-- FOV Drawing
+local SilentCircle = Drawing.new("Circle")
+SilentCircle.Color, SilentCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
+local AimCircle = Drawing.new("Circle")
+AimCircle.Color, AimCircle.Thickness = Color3.fromRGB(255, 255, 255), 1
+
 game:GetService("RunService").RenderStepped:Connect(function(delta)
+    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
+    SilentCircle.Visible = _G.ShowFOV; SilentCircle.Radius = silentFOV; SilentCircle.Position = center
+    AimCircle.Visible = _G.ShowFOV; AimCircle.Radius = aimbotFOV; AimCircle.Position = center
+
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
     cd = math.max(0, cd - delta)
+    
+    -- IMPORTANT: This ensures the Silent Aim only works when you hold the SELECTED weapon
     local gun = char:FindFirstChild(weapon)
     
-    -- TARGETING LOGIC
-    local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    local closest, minScore, targetHum = nil, math.huge, nil
     local entities = workspace:FindFirstChild("Entity")
-    
-    if entities then
-        for _, v in pairs(entities:GetChildren()) do
-            local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
-            local h = v:FindFirstChild("Zombie") or v:FindFirstChildOfClass("Humanoid")
-            if t and h and h.Health > 0 then
-                local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
-                if onScreen then
-                    local score = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
-                    if score < fovRadius and score < minScore then
-                        minScore, closest, targetHum = score, t, h
-                    end
-                end
+    if not entities then return end
+
+    local sTarget, sMin = nil, math.huge
+    local aTarget, aMin = nil, math.huge
+
+    for _, v in pairs(entities:GetChildren()) do
+        local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
+        local h = v:FindFirstChildOfClass("Humanoid") or v:FindFirstChild("Zombie")
+        
+        if t and h and h.Health > 0 then
+            local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
+            local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
+            local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+
+            if _G.SilentAimEnabled and onScreen and dist < silentDist and mouseDist < silentFOV then
+                if mouseDist < sMin then sMin, sTarget = mouseDist, t end
+            end
+            if _G.AimbotEnabled and onScreen and dist < aimbotDist and mouseDist < aimbotFOV then
+                if mouseDist < aMin then aMin, aTarget = mouseDist, t end
             end
         end
     end
 
-    -- INDEPENDENT EXECUTION
-    if closest then
-        -- 1. Aimbot Logic (Only moves camera)
-        if _G.AimbotEnabled then
-            camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, closest.Position), smoothing)
-        end
-        
-        -- 2. Silent Aim Logic (Only fires remotes)
-        if _G.SilentAimEnabled and gun and cd <= 0 then
-            replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
-                ["ShotPoint"] = char.HumanoidRootPart.Position, 
-                ["Direction"] = (closest.Position - char.HumanoidRootPart.Position).Unit, 
-                ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
-                ["TracerColor"] = Color3.new(0.6, 0.4, 1),
-                ["ShotId"] = math.random(1, 999), 
-                ["HitInfoList"] = {{["Part"] = closest, ["Position"] = closest.Position, ["Normal"] = Vector3.new(0,1,0)}},
-                ["ShotOrigin"] = gun.Handle.BulletOrigin, 
-                ["Victims"] = {{["Humanoid"] = targetHum, ["Object"] = closest}},
-                ["TargetPoints"] = {closest.Position}
-            })
-            cd = FIRE_RATE
-        end
+    if aTarget and _G.AimbotEnabled then
+        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, aTarget.Position), smoothing)
+    end
+    
+    -- Silent Aim Execution
+    if sTarget and _G.SilentAimEnabled and gun and cd <= 0 then
+        replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
+            ["ShotPoint"] = char.HumanoidRootPart.Position, 
+            ["Direction"] = (sTarget.Position - char.HumanoidRootPart.Position).Unit, 
+            ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
+            ["TracerColor"] = Color3.new(0.6, 0.4, 1),
+            ["ShotId"] = math.random(1, 9999), 
+            ["HitInfoList"] = {{["Part"] = sTarget, ["Position"] = sTarget.Position, ["Normal"] = Vector3.new(0,1,0)}},
+            ["ShotOrigin"] = gun.Handle.BulletOrigin, 
+            ["Victims"] = {{["Humanoid"] = sTarget.Parent:FindFirstChildOfClass("Humanoid"), ["Object"] = sTarget}},
+            ["TargetPoints"] = {sTarget.Position}
+        })
+        cd = FIRE_RATE
     end
 end)
