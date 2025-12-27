@@ -1,15 +1,16 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "ULTIMATE V12.7: MASTER EDITION",
-   LoadingTitle = "V12.6 Reborn",
-   LoadingSubtitle = "by Gemini AI Partner",
+   Name = "ULTIMATE V12.7: AMETHYST MASTER",
+   LoadingTitle = "V12.7 Mobile Reborn",
+   LoadingSubtitle = "by Ori",
+   Theme = "Amethyst", -- This changes the colors to purple/dark
    ConfigurationSaving = {
       Enabled = true,
-      FolderName = "V12_Master_Configs",
-      FileName = "MainScript"
+      FolderName = "V12_Configs",
+      FileName = "AmethystMaster"
    },
-   KeySystem = false -- Set to true if you want a key system
+   KeySystem = false 
 })
 
 -- [[ SHARED CONFIG ]]
@@ -24,52 +25,51 @@ local globalRange = 600
 local fovRadius = 150
 local FIRE_RATE = 0.1
 local cd = 0
+local lastBuy = 0
 
 -- [[ TABS ]]
-local MainTab = Window:CreateTab("Combat", 4483362458) -- Sword Icon
-local UtilityTab = Window:CreateTab("Utility", 4483345998) -- Gear Icon
+local CombatTab = Window:CreateTab("Combat", 4483362458) 
+local UtilityTab = Window:CreateTab("Utility", 4483345998)
 
 -- [[ COMBAT SECTION ]]
-MainTab:CreateSection("Main Cheats")
+CombatTab:CreateSection("Targeting")
 
-MainTab:CreateToggle({
+CombatTab:CreateToggle({
    Name = "Silent Aim",
    CurrentValue = false,
    Callback = function(Value) _G.SilentAimEnabled = Value end,
 })
 
-MainTab:CreateToggle({
-   Name = "Aimbot (Camera Lock)",
+CombatTab:CreateToggle({
+   Name = "Aimbot (CamLock)",
    CurrentValue = false,
    Callback = function(Value) _G.AimbotEnabled = Value end,
 })
 
-MainTab:CreateSlider({
-   Name = "Aimbot Smoothing",
+CombatTab:CreateSlider({
+   Name = "Smoothing",
    Range = {1, 10},
    Increment = 1,
-   Suffix = "Smoothness",
+   Suffix = "Smooth",
    CurrentValue = 5,
    Callback = function(Value) smoothing = Value / 10 end,
 })
 
-MainTab:CreateSection("Targeting Settings")
+CombatTab:CreateSlider({
+   Name = "FOV Radius",
+   Range = {30, 800},
+   Increment = 10,
+   Suffix = "px",
+   CurrentValue = 150,
+   Callback = function(Value) fovRadius = Value end,
+})
 
-MainTab:CreateDropdown({
+CombatTab:CreateDropdown({
    Name = "Target Bone",
    Options = {"Head", "HumanoidRootPart"},
    CurrentOption = {"Head"},
    MultipleOptions = false,
    Callback = function(Option) targetBone = Option[1] end,
-})
-
-MainTab:CreateSlider({
-   Name = "Field of View (FOV)",
-   Range = {30, 800},
-   Increment = 10,
-   Suffix = "Radius",
-   CurrentValue = 150,
-   Callback = function(Value) fovRadius = Value end,
 })
 
 -- [[ UTILITY SECTION ]]
@@ -82,23 +82,45 @@ UtilityTab:CreateToggle({
 })
 
 UtilityTab:CreateInput({
-   Name = "Equipped Weapon Name",
+   Name = "Weapon Name",
    PlaceholderText = "e.g. ak47",
    RemoveTextAfterFocusLost = false,
    Callback = function(Text) weapon = Text end,
 })
 
--- [[ ENGINE LOOP (Same reliable logic as V12.5) ]]
+UtilityTab:CreateToggle({
+   Name = "Wallcheck",
+   CurrentValue = false,
+   Callback = function(Value) wallCheckEnabled = Value end,
+})
+
+-- [[ ENGINE LOOP ]]
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
 local replicatedStorage = game:GetService("ReplicatedStorage")
 
 game:GetService("RunService").RenderStepped:Connect(function(delta)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- Auto Buy Logic (Async for no lag)
+    if _G.AutoBuyAmmo and tick() - lastBuy > 3 then
+        lastBuy = tick()
+        task.spawn(function()
+            local ammoID = "#322" -- Default AK; can be expanded if needed
+            pcall(function()
+                replicatedStorage.Library.RemotesManager.ShopService:InvokeServer(
+                    "buyammo",
+                    { StoreObj = workspace.Interactables.Shop_Sundays },
+                    ammoID
+                )
+            end)
+        end)
+    end
+
     if not (_G.SilentAimEnabled or _G.AimbotEnabled) then return end
     cd = math.max(0, cd - delta)
-    local char = player.Character
-    local gun = char and char:FindFirstChild(weapon)
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local gun = char:FindFirstChild(weapon)
     
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     local closest, minScore, targetHum = nil, math.huge, nil
@@ -132,7 +154,7 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
                 ["ShotPoint"] = char.HumanoidRootPart.Position, 
                 ["Direction"] = (closest.Position - char.HumanoidRootPart.Position).Unit, 
                 ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
-                ["TracerColor"] = Color3.new(1, 1, 1), 
+                ["TracerColor"] = Color3.new(0.6, 0.4, 1), -- Amethyst Tracer
                 ["ShotId"] = math.random(1, 999), 
                 ["HitInfoList"] = {{["Part"] = closest, ["Position"] = closest.Position, ["Normal"] = Vector3.new(0,1,0)}},
                 ["ShotOrigin"] = gun.Handle.BulletOrigin, 
@@ -145,8 +167,7 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
 end)
 
 Rayfield:Notify({
-   Title = "V12.7 Loaded",
-   Content = "Rayfield UI Initialized Successfully",
-   Duration = 5,
-   Image = 4483345998,
+   Title = "V12.7 Amethyst Ready",
+   Content = "All systems operational.",
+   Duration = 4,
 })
