@@ -1,4 +1,4 @@
--- [[ ULTIMATE V12.5: DUAL-PANE + FIXED SCREEN HIDE BUTTON ]]
+-- [[ ULTIMATE V12.6: MASTER MOBILE EDITION ]]
 
 local replicatedStorage = game:GetService("ReplicatedStorage")
 local player = game:GetService("Players").LocalPlayer
@@ -6,46 +6,56 @@ local runService = game:GetService("RunService")
 local uis = game:GetService("UserInputService")
 local camera = workspace.CurrentCamera
 
--- [[ CONFIG ]]
+-- [[ SHARED CONFIG ]]
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
+_G.AutoBuyAmmo = false
 local wallCheckEnabled = false 
 local targetBone = "Head" 
 local aimMode = "Crosshair" 
-local weapon = "ak47"
+local weapon = "AK-47" -- Default
 local smoothing = 0.5 
 local globalRange = 600
 local fovRadius = 150 
 local FIRE_RATE = 0.1 
 local cd = 0
+local lastBuy = 0
+
+-- [[ AMMO ID DATABASE ]]
+local ammoDatabase = {
+    ["P250"] = "#1",
+    ["tec-9"] = "#976",
+    ["XM1014"] = "#9",
+    ["MP5"] = "#40",
+    ["Sawed-off"] = "#70",
+    ["MP7"] = "#147",
+    ["AK-47"] = "#322",
+    ["M4A4"] = "#193",
+    ["Flamethrower"] = "#939",
+    ["AWP"] = "#367",
+    ["Minigun"] = "#416",
+    ["Tactical Bow"] = "#797",
+    ["Dual P250"] = "#886"
+}
 
 -- [[ WEAPON COLLECTION ]]
 local weapons = {}
-local prefabs = replicatedStorage:FindFirstChild("Prefabs")
-if prefabs and prefabs.Items then
-    for _, v in pairs(prefabs.Items:GetChildren()) do
-        if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") then
-            table.insert(weapons, v.Name)
-        end
-    end
-end
+for name, _ in pairs(ammoDatabase) do table.insert(weapons, name) end
 table.sort(weapons)
 
 -- [[ UI SETUP ]]
 local screenGui = Instance.new("ScreenGui", player:WaitForChild("PlayerGui"))
-screenGui.Name, screenGui.ResetOnSpawn = "V12_DualPane_Fixed", false
+screenGui.Name, screenGui.ResetOnSpawn = "V12_Master_6", false
 
--- FIXED HIDE BUTTON (Top Right of Screen)
 local hideBtn = Instance.new("TextButton", screenGui)
-hideBtn.Size, hideBtn.Position = UDim2.new(0, 55, 0, 55), UDim2.new(0.97, -55, 0.05, 0)
+hideBtn.Size, hideBtn.Position = UDim2.new(0, 50, 0, 50), UDim2.new(0.95, -50, 0.05, 0)
 hideBtn.BackgroundColor3, hideBtn.Text = Color3.fromRGB(40, 40, 40), "HIDE"
 hideBtn.TextColor3, hideBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
 Instance.new("UICorner", hideBtn)
 
--- MAIN CONTAINER
 local mainFrame = Instance.new("Frame", screenGui)
-mainFrame.Size, mainFrame.Position = UDim2.new(0, 420, 0, 260), UDim2.new(0.5, -210, 0.3, 0)
-mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(20, 20, 20), true, true
+mainFrame.Size, mainFrame.Position = UDim2.new(0, 240, 0, 600), UDim2.new(0.5, -120, 0.1, 0)
+mainFrame.BackgroundColor3, mainFrame.Active, mainFrame.Draggable = Color3.fromRGB(25, 25, 25), true, true
 Instance.new("UICorner", mainFrame)
 
 hideBtn.MouseButton1Click:Connect(function()
@@ -53,114 +63,90 @@ hideBtn.MouseButton1Click:Connect(function()
     hideBtn.Text = mainFrame.Visible and "HIDE" or "SHOW"
 end)
 
--- [[ LEFT PANE: SLIDERS & WEAPONS ]]
-local leftPane = Instance.new("Frame", mainFrame)
-leftPane.Size, leftPane.Position = UDim2.new(0.48, 0, 0.9, 0), UDim2.new(0.02, 0, 0.05, 0)
-leftPane.BackgroundTransparency = 1
-
-local function createSlider(name, pos, min, max, start, callback)
-    local lab = Instance.new("TextLabel", leftPane)
-    lab.Size, lab.Position, lab.Text = UDim2.new(1, 0, 0, 15), UDim2.new(0, 0, 0, pos), name .. ": " .. start
-    lab.TextColor3, lab.BackgroundTransparency, lab.TextXAlignment = Color3.new(1,1,1), 1, Enum.TextXAlignment.Left
-    
-    local bar = Instance.new("Frame", leftPane)
-    bar.Size, bar.Position, bar.BackgroundColor3 = UDim2.new(1, 0, 0, 8), UDim2.new(0, 0, 0, pos + 18), Color3.fromRGB(50,50,50)
-    local fill = Instance.new("Frame", bar)
-    fill.Size, fill.BackgroundColor3 = UDim2.new((start-min)/(max-min), 0, 1, 0), Color3.fromRGB(0, 160, 255)
-    
-    bar.InputBegan:Connect(function(input)
-        if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
-            local move = runService.RenderStepped:Connect(function()
-                local rel = math.clamp((uis:GetMouseLocation().X - bar.AbsolutePosition.X) / bar.AbsoluteSize.X, 0, 1)
-                local val = math.floor(min + (rel * (max - min)))
-                fill.Size, lab.Text = UDim2.new(rel, 0, 1, 0), name .. ": " .. val
-                callback(val)
-            end)
-            input.Changed:Connect(function() if input.UserInputState == Enum.UserInputState.End then move:Disconnect() end end)
-        end
-    end)
-end
-
-createSlider("Range", 0, 50, 1500, globalRange, function(v) globalRange = v end)
-createSlider("FOV", 45, 30, 800, fovRadius, function(v) fovRadius = v end)
-createSlider("Smooth", 90, 1, 10, smoothing*10, function(v) smoothing = v/10 end)
-
-local weaponDisplay = Instance.new("TextLabel", leftPane)
-weaponDisplay.Size, weaponDisplay.Position = UDim2.new(1, 0, 0, 25), UDim2.new(0, 0, 0, 135)
-weaponDisplay.Text = "WEAPON: " .. weapon:upper()
-weaponDisplay.TextColor3, weaponDisplay.Font, weaponDisplay.BackgroundTransparency = Color3.fromRGB(150, 100, 255), Enum.Font.GothamBold, 1
-
-local weaponList = Instance.new("ScrollingFrame", leftPane)
-weaponList.Size, weaponList.Position = UDim2.new(1, 0, 0, 75), UDim2.new(0, 0, 0, 160)
-weaponList.BackgroundColor3, weaponList.Visible = Color3.fromRGB(30, 30, 30), true
-weaponList.CanvasSize = UDim2.new(0, 0, 0, #weapons * 28)
-weaponList.ScrollBarThickness = 4
-Instance.new("UIListLayout", weaponList).Padding = UDim.new(0, 3)
-
-for _, wName in ipairs(weapons) do
-    local btn = Instance.new("TextButton", weaponList)
-    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 25), wName
-    btn.BackgroundColor3, btn.TextColor3 = Color3.fromRGB(45, 45, 45), Color3.new(1, 1, 1)
-    Instance.new("UICorner", btn)
-    btn.MouseButton1Click:Connect(function() 
-        weapon = wName; 
-        weaponDisplay.Text = "WEAPON: " .. weapon:upper() 
-    end)
-end
-
--- [[ RIGHT PANE: TOGGLES ]]
-local rightPane = Instance.new("Frame", mainFrame)
-rightPane.Size, rightPane.Position = UDim2.new(0.48, 0, 0.9, 0), UDim2.new(0.52, 0, 0.05, 0)
-rightPane.BackgroundTransparency = 1
-local layout = Instance.new("UIListLayout", rightPane)
-layout.Padding = UDim.new(0, 8)
-
-local function createToggle(name, callback)
-    local btn = Instance.new("TextButton", rightPane)
-    btn.Size = UDim2.new(1, 0, 0, 40)
+-- [[ UI HELPERS (Toggles & Sliders) ]]
+local function createToggle(name, pos, callback)
+    local btn = Instance.new("TextButton", mainFrame)
+    btn.Size, btn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, pos)
     btn.BackgroundColor3, btn.Text = Color3.fromRGB(200, 50, 50), name .. ": OFF"
     btn.TextColor3, btn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
     Instance.new("UICorner", btn)
     btn.MouseButton1Click:Connect(function() callback(btn) end)
 end
 
-createToggle("SILENT AIM", function(b)
+-- Toggles
+createToggle("SILENT AIM", 40, function(b)
     _G.SilentAimEnabled = not _G.SilentAimEnabled
     b.Text = "SILENT AIM: " .. (_G.SilentAimEnabled and "ON" or "OFF")
     b.BackgroundColor3 = _G.SilentAimEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
-createToggle("AIMBOT", function(b)
+createToggle("AIMBOT", 80, function(b)
     _G.AimbotEnabled = not _G.AimbotEnabled
     b.Text = "AIMBOT: " .. (_G.AimbotEnabled and "ON" or "OFF")
     b.BackgroundColor3 = _G.AimbotEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
-createToggle("WALLCHECK", function(b)
+createToggle("AUTO AMMO", 120, function(b)
+    _G.AutoBuyAmmo = not _G.AutoBuyAmmo
+    b.Text = "AUTO AMMO: " .. (_G.AutoBuyAmmo and "ON" or "OFF")
+    b.BackgroundColor3 = _G.AutoBuyAmmo and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+createToggle("WALLCHECK", 160, function(b)
     wallCheckEnabled = not wallCheckEnabled
     b.Text = "WALLCHECK: " .. (wallCheckEnabled and "ON" or "OFF")
     b.BackgroundColor3 = wallCheckEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
 end)
 
-createToggle("MODE: CROSSHAIR", function(b)
-    aimMode = (aimMode == "Crosshair") and "Distance" or "Crosshair"
-    b.Text = "MODE: " .. aimMode:upper()
-    b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-end)
+-- Weapon Selector UI
+local weaponBtn = Instance.new("TextButton", mainFrame)
+weaponBtn.Size, weaponBtn.Position = UDim2.new(0.9, 0, 0, 35), UDim2.new(0.05, 0, 0, 200)
+weaponBtn.BackgroundColor3, weaponBtn.Text = Color3.fromRGB(80, 40, 150), "WEAPON: " .. weapon
+weaponBtn.TextColor3, weaponBtn.Font = Color3.new(1,1,1), Enum.Font.GothamBold
+Instance.new("UICorner", weaponBtn)
 
-createToggle("TARGET: HEAD", function(b)
-    targetBone = (targetBone == "Head") and "Torso" or "Head"
-    b.Text = "TARGET: " .. targetBone:upper()
-    b.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-end)
+local weaponMenu = Instance.new("ScrollingFrame", mainFrame)
+weaponMenu.Size, weaponMenu.Position = UDim2.new(0.9, 0, 0, 120), UDim2.new(0.05, 0, 0, 240)
+weaponMenu.BackgroundColor3, weaponMenu.Visible = Color3.fromRGB(35, 35, 35), false
+weaponMenu.CanvasSize = UDim2.new(0, 0, 0, #weapons * 35)
+Instance.new("UIListLayout", weaponMenu).Padding = UDim.new(0, 5)
 
--- [[ ENGINE LOOP ]]
+for _, wName in ipairs(weapons) do
+    local btn = Instance.new("TextButton", weaponMenu)
+    btn.Size, btn.Text = UDim2.new(0.95, 0, 0, 30), wName
+    btn.BackgroundColor3, btn.TextColor3 = Color3.fromRGB(50, 50, 50), Color3.new(1, 1, 1)
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function()
+        weapon = wName
+        weaponBtn.Text = "WEAPON: " .. weapon:upper()
+        weaponMenu.Visible = false
+    end)
+end
+weaponBtn.MouseButton1Click:Connect(function() weaponMenu.Visible = not weaponMenu.Visible end)
+
+-- [[ ENGINE ]]
 runService.RenderStepped:Connect(function(delta)
+    local char = player.Character
+    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    
+    -- 1. SMART AUTO-BUY LOGIC
+    if _G.AutoBuyAmmo and tick() - lastBuy > 3 then -- Buy every 3 seconds if active
+        lastBuy = tick()
+        local ammoID = ammoDatabase[weapon]
+        if ammoID then
+            local buyArgs = {
+                "buyammo",
+                { StoreObj = workspace:WaitForChild("Interactables"):WaitForChild("Shop_Sundays") },
+                ammoID
+            }
+            replicatedStorage.Library.RemotesManager.ShopService:InvokeServer(unpack(buyArgs))
+        end
+    end
+
+    -- 2. AIMBOT & SILENT AIM LOGIC
     if not (_G.SilentAimEnabled or _G.AimbotEnabled) then return end
     cd = math.max(0, cd - delta)
-    local char = player.Character
-    local gun = char and char:FindFirstChild(weapon)
-    if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+    local gun = char:FindFirstChild(weapon)
     
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     local closest, minScore, targetHum = nil, math.huge, nil
@@ -173,18 +159,11 @@ runService.RenderStepped:Connect(function(delta)
             if t and h and h.Health > 0 then
                 local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
                 if dist < globalRange then
-                    local visible = true
-                    if wallCheckEnabled then
-                        local ray = Ray.new(camera.CFrame.Position, (t.Position - camera.CFrame.Position).Unit * dist)
-                        if workspace:FindPartOnRayWithIgnoreList(ray, {char, v}) then visible = false end
-                    end
-                    if visible then
-                        local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
-                        local score = (aimMode == "Crosshair") and (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude or dist
-                        if score < minScore then
-                            if aimMode ~= "Crosshair" or score < fovRadius then
-                                minScore, closest, targetHum = score, t, h
-                            end
+                    local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
+                    if onScreen then
+                        local score = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
+                        if score < fovRadius and score < minScore then
+                            minScore, closest, targetHum = score, t, h
                         end
                     end
                 end
