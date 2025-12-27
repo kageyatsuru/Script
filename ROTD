@@ -2,8 +2,8 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "ULTIMATE V12.7",
-   LoadingTitle = "Ex3cuting..",
-   LoadingSubtitle = "Made by Ori",
+   LoadingTitle = "Ex3cuting...",
+   LoadingSubtitle = "Made By Ori",
    Theme = "Amethyst",
    ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" }
 })
@@ -16,14 +16,14 @@ _G.AutoReload = false
 _G.ShowFOV = false
 
 local weapon = "ak47"
-local silentFOV, silentDist = 150, 600
-local aimbotFOV, aimbotDist = 100, 400
+local globalFOV = 150
+local globalDist = 600
 local smoothing = 0.5
 local FIRE_RATE = 0.1
 local cd = 0
 local lastBuy = 0
 
--- [[ YOUR SPECIFIC AMMO/ITEM IDs ]]
+-- [[ AMMO IDs ]]
 local ammoIDs = {
     ["p250"] = "#1", ["tec-9"] = "#976", ["XM1014"] = "#9", ["MP5"] = "#40", 
     ["Sawed-off"] = "#70", ["MP7"] = "#147", ["AK-47"] = "#322", ["M4A4"] = "#193", 
@@ -31,7 +31,7 @@ local ammoIDs = {
     ["Tactical Bow"] = "#797", ["Dual P250"] = "#886"
 }
 
--- [[ WEAPON COLLECTION LOGIC ]]
+-- [[ WEAPON COLLECTION ]]
 local weapons = {}
 local prefabs = replicatedStorage:FindFirstChild("Prefabs")
 if prefabs and prefabs.Items then
@@ -47,67 +47,90 @@ table.sort(weapons)
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local QOLTab = Window:CreateTab("QOL", 4483345998)
 local VisualsTab = Window:CreateTab("Visuals", 4483345998)
-local WeaponTab = Window:CreateTab("Weaponry", 4483345998)
 
--- [[ QOL TAB - WITH STATUS ]]
-QOLTab:CreateSection("Automation")
-QOLTab:CreateToggle({
-   Name = "Auto-Buy Ammo",
+-- [[ REDESIGNED COMBAT TAB ]]
+
+-- 1. SILENT AIM SECTION
+CombatTab:CreateSection("— Silent Aim —")
+CombatTab:CreateToggle({
+   Name = "Enable Silent Aim",
    CurrentValue = false,
-   Callback = function(v) _G.AutoReload = v end,
+   Callback = function(v) _G.SilentAimEnabled = v end,
 })
 
-local BuyStatus = QOLTab:CreateLabel("Status: Idle") -- The Status Label
+-- Weaponry moved directly under Silent Aim toggle
+CombatTab:CreateDropdown({
+   Name = "Select Weapon",
+   Options = weapons,
+   CurrentOption = {weapons[1] or "ak47"},
+   MultipleOptions = false,
+   Callback = function(Option) weapon = Option[1] end,
+})
 
--- [[ COMBAT TAB ]]
-CombatTab:CreateSection("— Silent Aim —")
-CombatTab:CreateToggle({Name = "Enable Silent Aim", CurrentValue = false, Callback = function(v) _G.SilentAimEnabled = v end})
-CombatTab:CreateSlider({Name = "Silent FOV", Range = {10, 800}, Increment = 10, CurrentValue = 150, Callback = function(v) silentFOV = v end})
-
+-- 2. AIMBOT SECTION
 CombatTab:CreateSection("— Aimbot —")
-CombatTab:CreateToggle({Name = "Enable Aimbot", CurrentValue = false, Callback = function(v) _G.AimbotEnabled = v end})
-CombatTab:CreateSlider({Name = "Smoothness", Range = {1, 10}, Increment = 1, CurrentValue = 5, Callback = function(v) smoothing = v / 10 end})
+CombatTab:CreateToggle({
+   Name = "Enable Aimbot",
+   CurrentValue = false,
+   Callback = function(v) _G.AimbotEnabled = v end,
+})
+CombatTab:CreateSlider({
+   Name = "Aimbot Smoothness",
+   Range = {1, 10},
+   Increment = 1,
+   CurrentValue = 5,
+   Callback = function(v) smoothing = v / 10 end,
+})
 
--- [[ WEAPONRY & VISUALS ]]
-WeaponTab:CreateDropdown({Name = "Select Active Weapon", Options = weapons, CurrentOption = {weapons[1] or "ak47"}, Callback = function(Option) weapon = Option[1] end})
-VisualsTab:CreateToggle({Name = "Show FOV Circles", CurrentValue = false, Callback = function(v) _G.ShowFOV = v end})
+-- 3. RANGE & DISTANCE SECTION (FOR BOTH)
+CombatTab:CreateSection("— Range & FOV (Global) —")
+CombatTab:CreateSlider({
+   Name = "FOV Radius",
+   Range = {10, 800},
+   Increment = 10,
+   CurrentValue = 150,
+   Callback = function(v) globalFOV = v end,
+})
+
+CombatTab:CreateSlider({
+   Name = "Max Distance",
+   Range = {50, 2000},
+   Increment = 50,
+   CurrentValue = 600,
+   Callback = function(v) globalDist = v end,
+})
+
+-- [[ QOL & VISUALS ]]
+QOLTab:CreateSection("Automation")
+QOLTab:CreateToggle({Name = "Auto-Buy Ammo", CurrentValue = false, Callback = function(v) _G.AutoReload = v end})
+local BuyStatus = QOLTab:CreateLabel("Status: Idle")
+
+VisualsTab:CreateToggle({Name = "Show FOV Circle", CurrentValue = false, Callback = function(v) _G.ShowFOV = v end})
 
 -- [[ ENGINE LOOP ]]
 local player = game.Players.LocalPlayer
 local camera = workspace.CurrentCamera
-local SilentCircle = Drawing.new("Circle")
-SilentCircle.Color, SilentCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
-local AimCircle = Drawing.new("Circle")
-AimCircle.Color, AimCircle.Thickness = Color3.fromRGB(255, 255, 255), 1
+local FovCircle = Drawing.new("Circle") -- Single Circle for both
+FovCircle.Color, FovCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
 
 game:GetService("RunService").RenderStepped:Connect(function(delta)
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
-    SilentCircle.Visible = _G.ShowFOV; SilentCircle.Radius = silentFOV; SilentCircle.Position = center
-    AimCircle.Visible = _G.ShowFOV; AimCircle.Radius = aimbotFOV; AimCircle.Position = center
+    FovCircle.Visible = _G.ShowFOV; FovCircle.Radius = globalFOV; FovCircle.Position = center
 
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
-    -- AUTO RELOAD LOGIC WITH STATUS UPDATES
+    -- Auto-Buy Loop
     if _G.AutoReload and tick() - lastBuy > 3 then
-        lastBuy = tick()
-        task.spawn(function()
+        lastBuy = tick(); task.spawn(function()
             for name, id in pairs(ammoIDs) do
                 if not _G.AutoReload then break end
-                BuyStatus:Set("Buying Ammo: " .. name)
-                pcall(function()
-                    replicatedStorage.Library.RemotesManager.ShopService:InvokeServer(
-                        "buyammo",
-                        { StoreObj = workspace.Interactables.Shop_Sundays },
-                        id
-                    )
-                end)
-                task.wait(0.1) -- Small delay between each ID to be safe
+                BuyStatus:Set("Buying: " .. name)
+                pcall(function() replicatedStorage.Library.RemotesManager.ShopService:InvokeServer("buyammo", { StoreObj = workspace.Interactables.Shop_Sundays }, id) end)
+                task.wait(0.1)
             end
-            BuyStatus:Set("Status: Waiting for Cooldown...")
+            BuyStatus:Set("Status: Waiting...")
         end)
-    elseif not _G.AutoReload then
-        BuyStatus:Set("Status: Disabled")
     end
 
     cd = math.max(0, cd - delta)
@@ -115,9 +138,7 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
     local entities = workspace:FindFirstChild("Entity")
     if not entities then return end
 
-    local sTarget, sMin = nil, math.huge
-    local aTarget, aMin = nil, math.huge
-
+    local target, minScore = nil, math.huge
     for _, v in pairs(entities:GetChildren()) do
         local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
         local h = v:FindFirstChildOfClass("Humanoid") or v:FindFirstChild("Zombie")
@@ -126,27 +147,27 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
             local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
             local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
 
-            if _G.SilentAimEnabled and onScreen and dist < silentDist and mouseDist < silentFOV then
-                if mouseDist < sMin then sMin, sTarget = mouseDist, t end
-            end
-            if _G.AimbotEnabled and onScreen and dist < aimbotDist and mouseDist < aimbotFOV then
-                if mouseDist < aMin then aMin, aTarget = mouseDist, t end
+            if onScreen and dist < globalDist and mouseDist < globalFOV then
+                if mouseDist < minScore then minScore, target = mouseDist, t end
             end
         end
     end
 
-    if aTarget and _G.AimbotEnabled then
-        camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, aTarget.Position), smoothing)
-    end
-    
-    if sTarget and _G.SilentAimEnabled and gun and cd <= 0 then
-        replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
-            ["ShotPoint"] = char.HumanoidRootPart.Position, ["Direction"] = (sTarget.Position - char.HumanoidRootPart.Position).Unit, 
-            ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, ["TracerColor"] = Color3.new(0.6, 0.4, 1),
-            ["ShotId"] = math.random(1, 9999), ["HitInfoList"] = {{["Part"] = sTarget, ["Position"] = sTarget.Position, ["Normal"] = VectorVector3.new(0,1,0)}},
-            ["ShotOrigin"] = gun.Handle.BulletOrigin, ["Victims"] = {{["Humanoid"] = sTarget.Parent:FindFirstChildOfClass("Humanoid"), ["Object"] = sTarget}},
-            ["TargetPoints"] = {sTarget.Position}
-        })
-        cd = FIRE_RATE
+    if target then
+        -- Aimbot Execution
+        if _G.AimbotEnabled then
+            camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, target.Position), smoothing)
+        end
+        -- Silent Aim Execution
+        if _G.SilentAimEnabled and gun and cd <= 0 then
+            replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
+                ["ShotPoint"] = char.HumanoidRootPart.Position, ["Direction"] = (target.Position - char.HumanoidRootPart.Position).Unit, 
+                ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, ["TracerColor"] = Color3.new(0.6, 0.4, 1),
+                ["ShotId"] = math.random(1, 9999), ["HitInfoList"] = {{["Part"] = target, ["Position"] = target.Position, ["Normal"] = Vector3.new(0,1,0)}},
+                ["ShotOrigin"] = gun.Handle.BulletOrigin, ["Victims"] = {{["Humanoid"] = target.Parent:FindFirstChildOfClass("Humanoid"), ["Object"] = target}},
+                ["TargetPoints"] = {target.Position}
+            })
+            cd = FIRE_RATE
+        end
     end
 end)
