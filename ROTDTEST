@@ -1,0 +1,204 @@
+local replicatedStorage = game:GetService("ReplicatedStorage")
+local player = game:GetService("Players").LocalPlayer
+local runService = game:GetService("RunService")
+local uis = game:GetService("UserInputService")
+
+-- CONTROL VARIABLES
+local isEnabled = false 
+local cd = 0
+local weapon = "ak47"
+local FIRE_RATE = 0.1 
+local dragging = false
+local dragInput, dragStart, startPos
+
+-- DISTANCE VARIABLES (SNAPPING)
+local maxDistance = 600 
+local MIN_DIST = 50
+local MAX_DIST = 1000
+local STEP = 50 
+
+-- WEAPON COLLECTION
+local weapons = {}
+local prefabs = replicatedStorage:FindFirstChild("Prefabs")
+if prefabs and prefabs.Items then
+    for _, v in pairs(prefabs.Items:GetChildren()) do
+        if v:FindFirstChild("Barral") or v:FindFirstChild("Barrel") then
+            table.insert(weapons, v.Name)
+        end
+    end
+end
+table.sort(weapons)
+
+-- UI SETUP
+local screenGui = Instance.new("ScreenGui")
+screenGui.Name = "MobileSilentAim_V3"
+screenGui.ResetOnSpawn = false
+screenGui.Parent = player:WaitForChild("PlayerGui")
+
+local container = Instance.new("Frame")
+container.Size = UDim2.new(0, 125, 0, 50)
+container.Position = UDim2.new(0.95, -125, 0.4, 0) 
+container.BackgroundTransparency = 1
+container.Parent = screenGui
+
+local toggleBtn = Instance.new("TextButton")
+toggleBtn.Size = UDim2.new(0, 50, 0, 50)
+toggleBtn.BackgroundColor3 = Color3.fromRGB(200, 50, 50)
+toggleBtn.Text = "OFF"
+toggleBtn.Font = Enum.Font.SourceSansBold
+toggleBtn.TextColor3 = Color3.new(1,1,1)
+toggleBtn.Parent = container
+Instance.new("UICorner", toggleBtn)
+
+local mainFrame = Instance.new("Frame")
+mainFrame.Size = UDim2.new(0, 125, 0, 50)
+mainFrame.Position = UDim2.new(0, 55, 0, 0)
+mainFrame.BackgroundColor3 = Color3.fromRGB(35, 35, 35)
+mainFrame.Parent = container
+Instance.new("UICorner", mainFrame)
+
+local expandButton = Instance.new("TextButton")
+expandButton.Size = UDim2.new(1, 0, 1, 0)
+expandButton.Text = "Weapon: " .. weapon
+expandButton.Font = Enum.Font.SourceSansBold
+expandButton.TextColor3 = Color3.new(1, 1, 1)
+expandButton.BackgroundTransparency = 1
+expandButton.Parent = mainFrame
+
+-- SLIDER & LIST MENU
+local extraMenu = Instance.new("Frame")
+extraMenu.Size = UDim2.new(1, 0, 0, 240)
+extraMenu.Position = UDim2.new(0, 0, 1, 5)
+extraMenu.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
+extraMenu.Visible = false
+extraMenu.Parent = mainFrame
+Instance.new("UICorner", extraMenu)
+
+local sliderLabel = Instance.new("TextLabel")
+sliderLabel.Size = UDim2.new(1, 0, 0, 25)
+sliderLabel.Text = "Range: " .. maxDistance
+sliderLabel.TextColor3 = Color3.new(1, 1, 1)
+sliderLabel.BackgroundTransparency = 1
+sliderLabel.Font = Enum.Font.SourceSansBold
+sliderLabel.Parent = extraMenu
+
+local sliderBar = Instance.new("Frame")
+sliderBar.Size = UDim2.new(0.8, 0, 0, 4)
+sliderBar.Position = UDim2.new(0.1, 0, 0, 35)
+sliderBar.BackgroundColor3 = Color3.fromRGB(100, 100, 100)
+sliderBar.Parent = extraMenu
+
+local sliderFill = Instance.new("Frame")
+sliderFill.Size = UDim2.new((maxDistance - MIN_DIST) / (MAX_DIST - MIN_DIST), 0, 1, 0)
+sliderFill.BackgroundColor3 = Color3.fromRGB(50, 200, 50)
+sliderFill.Parent = sliderBar
+
+local weaponsFrame = Instance.new("ScrollingFrame")
+weaponsFrame.Size = UDim2.new(1, 0, 0, 180)
+weaponsFrame.Position = UDim2.new(0, 0, 0, 50)
+weaponsFrame.BackgroundTransparency = 1
+weaponsFrame.Parent = extraMenu
+
+local layout = Instance.new("UIListLayout")
+layout.Parent = weaponsFrame
+layout.Padding = UDim.new(0, 4)
+layout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+for _, weaponname in ipairs(weapons) do
+    local btn = Instance.new("TextButton")
+    btn.Size = UDim2.new(0.9, 0, 0, 30)
+    btn.Text = weaponname
+    btn.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    btn.TextColor3 = Color3.new(1,1,1)
+    btn.Parent = weaponsFrame
+    Instance.new("UICorner", btn)
+    btn.MouseButton1Click:Connect(function()
+        weapon = weaponname
+        expandButton.Text = "Weapon: " .. weapon
+        extraMenu.Visible = false
+    end)
+end
+
+-- FIXED DRAGGING LOGIC (Restricted to toggleBtn grab)
+toggleBtn.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
+        dragging = true
+        dragStart = input.Position
+        startPos = container.Position
+        
+        input.Changed:Connect(function()
+            if input.UserInputState == Enum.UserInputState.End then
+                dragging = false
+            end
+        end)
+    end
+end)
+
+uis.InputChanged:Connect(function(input)
+    if dragging and (input.UserInputType == Enum.UserInputType.MouseMovement or input.UserInputType == Enum.UserInputType.Touch) then
+        local delta = input.Position - dragStart
+        container.Position = UDim2.new(startPos.X.Scale, startPos.X.Offset + delta.X, startPos.Y.Scale, startPos.Y.Offset + delta.Y)
+    end
+end)
+
+-- SLIDER LOGIC
+local function updateSlider(input)
+    local relativeX = math.clamp((input.Position.X - sliderBar.AbsolutePosition.X) / sliderBar.AbsoluteSize.X, 0, 1)
+    local rawValue = MIN_DIST + (relativeX * (MAX_DIST - MIN_DIST))
+    maxDistance = math.floor((rawValue / STEP) + 0.5) * STEP
+    sliderLabel.Text = "Range: " .. maxDistance
+    sliderFill.Size = UDim2.new((maxDistance - MIN_DIST) / (MAX_DIST - MIN_DIST), 0, 1, 0)
+end
+
+local sliderActive = false
+sliderBar.InputBegan:Connect(function(input)
+    if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then
+        sliderActive = true
+        updateSlider(input)
+    end
+end)
+uis.InputEnded:Connect(function(input) if input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseButton1 then sliderActive = false end end)
+uis.InputChanged:Connect(function(input) if sliderActive and (input.UserInputType == Enum.UserInputType.Touch or input.UserInputType == Enum.UserInputType.MouseMovement) then updateSlider(input) end end)
+
+toggleBtn.MouseButton1Click:Connect(function()
+    isEnabled = not isEnabled
+    toggleBtn.Text = isEnabled and "ON" or "OFF"
+    toggleBtn.BackgroundColor3 = isEnabled and Color3.fromRGB(50, 200, 50) or Color3.fromRGB(200, 50, 50)
+end)
+
+expandButton.MouseButton1Click:Connect(function() extraMenu.Visible = not extraMenu.Visible end)
+
+-- SILENT AIM LOOP
+runService.RenderStepped:Connect(function(delta)
+    if not isEnabled then return end
+    cd = math.max(0, cd - delta)
+    local char = player.Character
+    if not char or not char:FindFirstChild(weapon) then return end
+    if cd <= 0 then
+        local entities = workspace:FindFirstChild("Entity")
+        if not entities then return end
+        for _, v in pairs(entities:GetChildren()) do
+            if v:FindFirstChild("Head") and v:FindFirstChild("Zombie") and v.Zombie.Health > 0 then
+                local dist = (char.HumanoidRootPart.Position - v.Head.Position).Magnitude
+                if dist < maxDistance then
+                    replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer(
+                        "#1", char[weapon], 
+                        {
+                            ["ShotPoint"] = char.HumanoidRootPart.Position, 
+                            ["Direction"] = (v.Head.Position - char.HumanoidRootPart.Position).Unit, 
+                            ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, 
+                            ["TracerColor"] = Color3.new(1, 1, 1), 
+                            ["ShotId"] = 322, 
+                            ["HitInfoList"] = {{["Part"] = v.Head, ["Position"] = v.Head.Position, ["Normal"] = Vector3.new(0,1,0)}},
+                            ["ShotOrigin"] = char[weapon].Handle.BulletOrigin, 
+                            ["Victims"] = {{["Humanoid"] = v.Zombie, ["Object"] = v.Head}},
+                            ["TargetPoints"] = {v.Head.Position}
+                        }
+                    )
+                    cd = FIRE_RATE
+                    break
+                end
+            end
+        end
+    end
+end)
