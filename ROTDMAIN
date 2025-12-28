@@ -35,7 +35,9 @@ local ammoDatabase = {
     ["AWP"] = "#367",
     ["Minigun"] = "#416",
     ["Tactical Bow"] = "#797",
-    ["Dual P250"] = "#886"
+    ["Dual P250"] = "#886",
+    ["Grenade Launcher"] = "#1064",
+    ["Revolver 454"] = " #1110"
 }
 
 -- [[ WEAPON COLLECTION ]]
