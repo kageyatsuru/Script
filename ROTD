@@ -3,19 +3,25 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 local Window = Rayfield:CreateWindow({
    Name = "ULTIMATE V12.7",
    LoadingTitle = "Ex3cuting...",
-   LoadingSubtitle = "Made By Ori",
+   LoadingSubtitle = "Made By Ori & Friend",
    Theme = "Amethyst",
    ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" }
 })
 
 -- [[ SHARED CONFIG ]]
 local replicatedStorage = game:GetService("ReplicatedStorage")
-local player = game.Players.LocalPlayer
+local players = game:GetService("Players")
+local runService = game:GetService("RunService")
+local player = players.LocalPlayer
 local camera = workspace.CurrentCamera
+
+-- Attempt to get DataModule for the new Ammo Fix
+local DataModule = require(player:WaitForChild("DataModule", 30))
 
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
 _G.AutoReload = false
+_G.InfAmmo = false -- New Toggle Variable
 _G.ShowFOV = false
 _G.TPBehind = false
 _G.TPDist = 5
@@ -124,7 +130,13 @@ CombatTab:CreateSlider({
 })
 
 -- [[ QOL TAB ]]
-QOLTab:CreateSection("Automation")
+QOLTab:CreateSection("Ammo Mods")
+QOLTab:CreateToggle({
+    Name = "Infinite Ammo (Override)", 
+    CurrentValue = false, 
+    Callback = function(v) _G.InfAmmo = v end
+})
+
 QOLTab:CreateToggle({
     Name = "Auto-Buy Ammo", 
     CurrentValue = false, 
@@ -148,14 +160,6 @@ QOLTab:CreateButton({
         Rayfield:Notify({Title = "Ammo", Content = "All types disabled", Duration = 2})
     end,
 })
-
-for name, _ in pairs(ammoIDs) do
-    QOLTab:CreateToggle({
-        Name = "Buy " .. name,
-        CurrentValue = true,
-        Callback = function(v) selectedAmmo[name] = v end
-    })
-end
 
 -- [[ VISUALS TAB ]]
 VisualsTab:CreateToggle({
@@ -184,13 +188,32 @@ local function GetNearestShop()
     return nearest
 end
 
-game:GetService("RunService").RenderStepped:Connect(function(delta)
+runService.RenderStepped:Connect(function(delta)
     local center = Vector2.new(camera.ViewportSize.X / 2, camera.ViewportSize.Y / 2)
     FovCircle.Visible = _G.ShowFOV; FovCircle.Radius = globalFOV; FovCircle.Position = center
 
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
     
+    -- FRIEND'S AMMO OVERRIDE LOGIC
+    if _G.InfAmmo and DataModule then
+        pcall(function()
+            setthreadidentity(2)
+            local charData = DataModule:GetModCharacter()
+            if charData and charData.EquippedItem then
+                local item = charData.EquippedItem
+                local id = item.ID
+                local itemClass = DataModule:GetItemClass(id)
+                local props = itemClass.Properties
+                local realProps = DataModule.GetItemById(id).Values
+                
+                realProps.A = realProps.MA
+                props.Ammo = props.MaxAmmo
+            end
+            setthreadidentity(8)
+        end)
+    end
+
     -- Auto-Buy Logic
     if _G.AutoReload and tick() - lastBuy > 3 then
         lastBuy = tick()
@@ -233,7 +256,6 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
     end
 
     if target then
-        -- TP Behind Logic
         if _G.TPBehind and target.Parent then
             local zRoot = target.Parent:FindFirstChild("HumanoidRootPart")
             if zRoot then
@@ -241,12 +263,9 @@ game:GetService("RunService").RenderStepped:Connect(function(delta)
                 char.HumanoidRootPart.CFrame = CFrame.lookAt(backPos.p, zRoot.Position)
             end
         end
-
-        -- Original Aimbot Logic
         if _G.AimbotEnabled then
             camera.CFrame = camera.CFrame:Lerp(CFrame.new(camera.CFrame.Position, target.Position), smoothing)
         end
-        -- Original Silent Aim Logic
         if _G.SilentAimEnabled and gun and cd <= 0 then
             replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
                 ["ShotPoint"] = char.HumanoidRootPart.Position, ["Direction"] = (target.Position - char.HumanoidRootPart.Position).Unit, 
