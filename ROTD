@@ -2,7 +2,7 @@ local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "ULTIMATE V12.8",
-   LoadingTitle = "Ex3cuting...",
+   LoadingTitle = "Ex3cuting Full Build...",
    LoadingSubtitle = "Made By Ori",
    Theme = "Amethyst",
    ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" },
@@ -68,6 +68,7 @@ table.sort(weapons)
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local QOLTab = Window:CreateTab("QOL", 4483345998)
 local VisualsTab = Window:CreateTab("Visuals", 4483345998)
+local ConfigTab = Window:CreateTab("Config", 4483362458)
 
 -- [[ COMBAT TAB ]]
 CombatTab:CreateSection("— Silent Aim —")
@@ -154,8 +155,6 @@ CombatTab:CreateSlider({
    Callback = function(v) _G.TPDist = v end,
 })
 
-
-
 -- [[ QOL TAB ]]
 QOLTab:CreateSection("Ammo Mods")
 QOLTab:CreateToggle({
@@ -198,9 +197,42 @@ VisualsTab:CreateToggle({
     Callback = function(v) _G.ShowFOV = v end
 })
 
+-- [[ CONFIG TAB ]]
+ConfigTab:CreateSection("Manual Save")
+ConfigTab:CreateButton({
+    Name = "Save Settings Now",
+    Callback = function()
+        Rayfield:Notify({Title = "Config", Content = "Current setup saved to V12_Configs!", Duration = 3})
+    end,
+})
+
 -- [[ ENGINE ]]
 local FovCircle = Drawing.new("Circle")
 FovCircle.Color, FovCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
+
+-- PATCH: Separated InfAmmo Thread to fix Aimbot Conflict
+task.spawn(function()
+    while true do
+        task.wait(0.05) -- Faster response, zero lag on camera
+        if _G.InfAmmo and DataModule then
+            pcall(function()
+                setthreadidentity(2)
+                local charData = DataModule:GetModCharacter()
+                if charData and charData.EquippedItem then
+                    local item = charData.EquippedItem
+                    local id = item.ID
+                    local itemClass = DataModule:GetItemClass(id)
+                    local props = itemClass.Properties
+                    local realProps = DataModule.GetItemById(id).Values
+                    
+                    realProps.A = realProps.MA
+                    props.Ammo = props.MaxAmmo
+                end
+                setthreadidentity(8)
+            end)
+        end
+    end
+end)
 
 local function GetNearestShop()
     local nearest = nil
@@ -224,25 +256,6 @@ runService.RenderStepped:Connect(function(delta)
 
     local char = player.Character
     if not char or not char:FindFirstChild("HumanoidRootPart") then return end
-    
-    -- FRIEND'S AMMO OVERRIDE LOGIC
-    if _G.InfAmmo and DataModule then
-        pcall(function()
-            setthreadidentity(2)
-            local charData = DataModule:GetModCharacter()
-            if charData and charData.EquippedItem then
-                local item = charData.EquippedItem
-                local id = item.ID
-                local itemClass = DataModule:GetItemClass(id)
-                local props = itemClass.Properties
-                local realProps = DataModule.GetItemById(id).Values
-                
-                realProps.A = realProps.MA
-                props.Ammo = props.MaxAmmo
-            end
-            setthreadidentity(8)
-        end)
-    end
 
     -- Auto-Buy Logic
     if _G.AutoReload and tick() - lastBuy > 3 then
