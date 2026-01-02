@@ -1,11 +1,12 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "ULTIMATE V12.7",
+   Name = "ULTIMATE V12.8",
    LoadingTitle = "Ex3cuting...",
-   LoadingSubtitle = "Made By Ori & Friend",
+   LoadingSubtitle = "Made By Ori",
    Theme = "Amethyst",
-   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" }
+   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" },
+   KeybindSource = Enum.KeyCode.X -- Key to hide/show the menu
 })
 
 -- [[ SHARED CONFIG ]]
@@ -21,7 +22,7 @@ local DataModule = require(player:WaitForChild("DataModule", 30))
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
 _G.AutoReload = false
-_G.InfAmmo = false -- New Toggle Variable
+_G.InfAmmo = false 
 _G.ShowFOV = false
 _G.TPBehind = false
 _G.TPDist = 5
@@ -70,10 +71,18 @@ local VisualsTab = Window:CreateTab("Visuals", 4483345998)
 
 -- [[ COMBAT TAB ]]
 CombatTab:CreateSection("— Silent Aim —")
-CombatTab:CreateToggle({
+local SilentAimToggle = CombatTab:CreateToggle({
    Name = "Enable Silent Aim",
    CurrentValue = false,
+   Flag = "SilentAim_Tog",
    Callback = function(v) _G.SilentAimEnabled = v end,
+})
+
+CombatTab:CreateKeybind({
+   Name = "Silent Aim Keybind",
+   CurrentKeybind = "Q",
+   Flag = "SA_Key",
+   Callback = function() SilentAimToggle:Set(not _G.SilentAimEnabled) end,
 })
 
 CombatTab:CreateDropdown({
@@ -81,35 +90,8 @@ CombatTab:CreateDropdown({
    Options = weapons,
    CurrentOption = {weapons[1] or "ak47"},
    MultipleOptions = false,
+   Flag = "SelectedWeapon",
    Callback = function(Option) weapon = Option[1] end,
-})
-
-CombatTab:CreateSection("— Aimbot —")
-CombatTab:CreateToggle({
-   Name = "Enable Aimbot",
-   CurrentValue = false,
-   Callback = function(v) _G.AimbotEnabled = v end,
-})
-CombatTab:CreateSlider({
-   Name = "Aimbot Smoothness",
-   Range = {1, 10},
-   Increment = 1,
-   CurrentValue = 5,
-   Callback = function(v) smoothing = v / 10 end,
-})
-
-CombatTab:CreateSection("— Movement —")
-CombatTab:CreateToggle({
-   Name = "TP Behind Zombie",
-   CurrentValue = false,
-   Callback = function(v) _G.TPBehind = v end,
-})
-CombatTab:CreateSlider({
-   Name = "TP Distance",
-   Range = {2, 15},
-   Increment = 1,
-   CurrentValue = 5,
-   Callback = function(v) _G.TPDist = v end,
 })
 
 CombatTab:CreateSection("— Range & FOV (Global) —")
@@ -118,6 +100,7 @@ CombatTab:CreateSlider({
    Range = {10, 800},
    Increment = 10,
    CurrentValue = 150,
+   Flag = "FOVRadiusSlider",
    Callback = function(v) globalFOV = v end,
 })
 
@@ -126,20 +109,66 @@ CombatTab:CreateSlider({
    Range = {50, 2000},
    Increment = 50,
    CurrentValue = 600,
+   Flag = "MaxDistSlider",
    Callback = function(v) globalDist = v end,
 })
+
+
+CombatTab:CreateSection("— Aimbot —")
+local AimbotToggle = CombatTab:CreateToggle({
+   Name = "Enable Aimbot",
+   CurrentValue = false,
+   Flag = "Aimbot_Tog",
+   Callback = function(v) _G.AimbotEnabled = v end,
+})
+
+CombatTab:CreateKeybind({
+   Name = "Aimbot Keybind",
+   CurrentKeybind = "E",
+   Flag = "AB_Key",
+   Callback = function() AimbotToggle:Set(not _G.AimbotEnabled) end,
+})
+
+CombatTab:CreateSlider({
+   Name = "Aimbot Smoothness",
+   Range = {1, 10},
+   Increment = 1,
+   CurrentValue = 5,
+   Flag = "SmoothSlider",
+   Callback = function(v) smoothing = v / 10 end,
+})
+
+CombatTab:CreateSection("— Movement —")
+CombatTab:CreateToggle({
+   Name = "TP Behind Zombie",
+   CurrentValue = false,
+   Flag = "TP_Tog",
+   Callback = function(v) _G.TPBehind = v end,
+})
+CombatTab:CreateSlider({
+   Name = "TP Distance",
+   Range = {2, 15},
+   Increment = 1,
+   CurrentValue = 5,
+   Flag = "TPDistSlider",
+   Callback = function(v) _G.TPDist = v end,
+})
+
+
 
 -- [[ QOL TAB ]]
 QOLTab:CreateSection("Ammo Mods")
 QOLTab:CreateToggle({
     Name = "Infinite Ammo (Override)", 
     CurrentValue = false, 
+    Flag = "InfAmmo_Tog",
     Callback = function(v) _G.InfAmmo = v end
 })
 
 QOLTab:CreateToggle({
     Name = "Auto-Buy Ammo", 
     CurrentValue = false, 
+    Flag = "AutoBuy_Tog",
     Callback = function(v) _G.AutoReload = v end
 })
 local BuyStatus = QOLTab:CreateLabel("Status: Idle")
@@ -165,6 +194,7 @@ QOLTab:CreateButton({
 VisualsTab:CreateToggle({
     Name = "Show FOV Circle", 
     CurrentValue = false, 
+    Flag = "ShowFOV_Tog",
     Callback = function(v) _G.ShowFOV = v end
 })
 
