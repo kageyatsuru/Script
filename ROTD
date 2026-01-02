@@ -85,7 +85,7 @@ local SilentAimToggle = CombatTab:CreateToggle({
 
 CombatTab:CreateKeybind({
    Name = "Silent Aim Keybind",
-   CurrentKeybind = "Q",
+   CurrentKeybind = "F",
    Flag = "SA_Key",
    Callback = function() SilentAimToggle:Set(not _G.SilentAimEnabled) end,
 })
@@ -128,7 +128,7 @@ local AimbotToggle = CombatTab:CreateToggle({
 
 CombatTab:CreateKeybind({
    Name = "Aimbot Keybind",
-   CurrentKeybind = "E",
+   CurrentKeybind = "Q",
    Flag = "AB_Key",
    Callback = function() AimbotToggle:Set(not _G.AimbotEnabled) end,
 })
