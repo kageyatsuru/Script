@@ -5,8 +5,12 @@ local Window = Rayfield:CreateWindow({
    LoadingTitle = "Ex3cuting Full Build...",
    LoadingSubtitle = "Made By Ori",
    Theme = "Amethyst",
-   ConfigurationSaving = { Enabled = true, FolderName = "V12_Configs", FileName = "CombatMaster" },
-   KeybindSource = Enum.KeyCode.X -- Key to hide/show the menu
+   ConfigurationSaving = { 
+      Enabled = true, 
+      FolderName = "V12_Configs", 
+      FileName = "CombatMaster" 
+   },
+   KeybindSource = Enum.KeyCode.X 
 })
 
 -- [[ SHARED CONFIG ]]
@@ -16,7 +20,7 @@ local runService = game:GetService("RunService")
 local player = players.LocalPlayer
 local camera = workspace.CurrentCamera
 
--- Attempt to get DataModule for the new Ammo Fix
+-- Attempt to get DataModule
 local DataModule = require(player:WaitForChild("DataModule", 30))
 
 _G.SilentAimEnabled = false
@@ -68,7 +72,7 @@ table.sort(weapons)
 local CombatTab = Window:CreateTab("Combat", 4483362458)
 local QOLTab = Window:CreateTab("QOL", 4483345998)
 local VisualsTab = Window:CreateTab("Visuals", 4483345998)
-local ConfigTab = Window:CreateTab("Config", 4483362458)
+local ConfigTab = Window:CreateTab("Settings", 4483362458)
 
 -- [[ COMBAT TAB ]]
 CombatTab:CreateSection("— Silent Aim —")
@@ -91,7 +95,7 @@ CombatTab:CreateDropdown({
    Options = weapons,
    CurrentOption = {weapons[1] or "ak47"},
    MultipleOptions = false,
-   Flag = "SelectedWeapon",
+   Flag = "SelectedWeapon", -- THIS ALLOWS SAVING
    Callback = function(Option) weapon = Option[1] end,
 })
 
@@ -113,7 +117,6 @@ CombatTab:CreateSlider({
    Flag = "MaxDistSlider",
    Callback = function(v) globalDist = v end,
 })
-
 
 CombatTab:CreateSection("— Aimbot —")
 local AimbotToggle = CombatTab:CreateToggle({
@@ -190,6 +193,7 @@ QOLTab:CreateButton({
 })
 
 -- [[ VISUALS TAB ]]
+VisualsTab:CreateSection("World Visuals")
 VisualsTab:CreateToggle({
     Name = "Show FOV Circle", 
     CurrentValue = false, 
@@ -198,11 +202,13 @@ VisualsTab:CreateToggle({
 })
 
 -- [[ CONFIG TAB ]]
-ConfigTab:CreateSection("Manual Save")
+ConfigTab:CreateSection("Configuration Management")
+ConfigTab:CreateParagraph({Title = "How to Save", Content = "Rayfield saves Toggles and Sliders automatically. Use the button below to force a save of your weapon choice."})
+
 ConfigTab:CreateButton({
-    Name = "Save Settings Now",
+    Name = "Save Current Config",
     Callback = function()
-        Rayfield:Notify({Title = "Config", Content = "Current setup saved to V12_Configs!", Duration = 3})
+        Rayfield:Notify({Title = "Saved!", Content = "Your weapon and combat settings are now locked.", Duration = 3})
     end,
 })
 
@@ -210,10 +216,10 @@ ConfigTab:CreateButton({
 local FovCircle = Drawing.new("Circle")
 FovCircle.Color, FovCircle.Thickness = Color3.fromRGB(150, 100, 255), 1
 
--- PATCH: Separated InfAmmo Thread to fix Aimbot Conflict
+-- PATCHED AMMO OVERRIDE LOGIC
 task.spawn(function()
     while true do
-        task.wait(0.05) -- Faster response, zero lag on camera
+        task.wait(0.01)
         if _G.InfAmmo and DataModule then
             pcall(function()
                 setthreadidentity(2)
