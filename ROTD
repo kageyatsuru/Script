@@ -7,8 +7,8 @@ local Window = Rayfield:CreateWindow({
    Theme = "Amethyst",
    ConfigurationSaving = { 
       Enabled = true, 
-      FolderName = "V12_Configs", 
-      FileName = "CombatMaster" 
+      FolderName = "ROTD Ex3 Config", 
+      FileName = "Ex3 ROTD Config File" 
    },
    KeybindSource = Enum.KeyCode.X 
 })
