@@ -304,6 +304,15 @@ runService.RenderStepped:Connect(function(delta)
                     task.wait(0.1)
                 end
             end
+            
+            -- NEW: REFILL AMMO POUCH CHARGES
+            if _G.AutoReload then
+                BuyStatus:Set("Refilling Pouch...")
+                pcall(function()
+                    replicatedStorage.Library.RemotesManager.ShopService:InvokeServer("refillcharges", shop, "#1488")
+                end)
+            end
+            
             BuyStatus:Set("Status: Waiting...")
         end)
     end
