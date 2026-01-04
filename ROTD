@@ -41,12 +41,12 @@ local lastBuy = 0
 
 -- [[ AMMO DATA & SELECTION ]]
 local ammoIDs = {
-    ["p250"] = "#1", ["tec-9"] = "#976", ["XM1014"] = "#9", ["MP5"] = "#40", 
+    ["p250"] = "#1", ["Tec-9"] = "#976", ["XM1014"] = "#9", ["MP5"] = "#40", 
     ["Sawed-off"] = "#70", ["MP7"] = "#147", ["AK-47"] = "#322", ["M4A4"] = "#193", 
     ["Flamethrower"] = "#939", ["AWP"] = "#367", ["Minigun"] = "#416", 
     ["Tactical Bow"] = "#797", ["Dual P250"] = "#886",
     ["Grenade Launcher"] = "#1064", ["Revolver 454"] = "#1110",
-    ["FNFAL"] = "#1370"
+    ["FNFAL"] = "#1370", ["CZ-Scorpion"] = "#1369", ["Mariner 590"] = "#1481"
 }
 
 local selectedAmmo = {}
