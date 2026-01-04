@@ -45,7 +45,8 @@ local ammoIDs = {
     ["Sawed-off"] = "#70", ["MP7"] = "#147", ["AK-47"] = "#322", ["M4A4"] = "#193", 
     ["Flamethrower"] = "#939", ["AWP"] = "#367", ["Minigun"] = "#416", 
     ["Tactical Bow"] = "#797", ["Dual P250"] = "#886",
-    ["Grenade Launcher"] = "#1064", ["Revolver 454"] = "#1110"
+    ["Grenade Launcher"] = "#1064", ["Revolver 454"] = "#1110",
+    ["FNFAL"] = "#1370"
 }
 
 local selectedAmmo = {}
@@ -53,7 +54,7 @@ for name, _ in pairs(ammoIDs) do selectedAmmo[name] = true end
 
 local shopNames = {
     "Shop_Sundays", "Shop_Warehouse", "Shop_Underbridge", 
-    "Shop_TrainStation", "Shop_Residentials"
+    "Shop_TrainStation", "Shop_Residentials", "Shop_Clinic"
 }
 
 -- [[ WEAPON COLLECTION ]]
@@ -95,7 +96,7 @@ CombatTab:CreateDropdown({
    Options = weapons,
    CurrentOption = {weapons[1] or "ak47"},
    MultipleOptions = false,
-   Flag = "SelectedWeapon", -- THIS ALLOWS SAVING
+   Flag = "SelectedWeapon", 
    Callback = function(Option) weapon = Option[1] end,
 })
 
@@ -160,19 +161,34 @@ CombatTab:CreateSlider({
 
 -- [[ QOL TAB ]]
 QOLTab:CreateSection("Ammo Mods")
-QOLTab:CreateToggle({
+local InfAmmoToggle = QOLTab:CreateToggle({
     Name = "Infinite Ammo (Override)", 
     CurrentValue = false, 
     Flag = "InfAmmo_Tog",
     Callback = function(v) _G.InfAmmo = v end
 })
 
-QOLTab:CreateToggle({
+QOLTab:CreateKeybind({
+   Name = "Inf Ammo Keybind",
+   CurrentKeybind = "T",
+   Flag = "InfAmmo_Key",
+   Callback = function() InfAmmoToggle:Set(not _G.InfAmmo) end,
+})
+
+local AutoBuyToggle = QOLTab:CreateToggle({
     Name = "Auto-Buy Ammo", 
     CurrentValue = false, 
     Flag = "AutoBuy_Tog",
     Callback = function(v) _G.AutoReload = v end
 })
+
+QOLTab:CreateKeybind({
+   Name = "Auto Buy Keybind",
+   CurrentKeybind = "Y",
+   Flag = "AutoBuy_Key",
+   Callback = function() AutoBuyToggle:Set(not _G.AutoReload) end,
+})
+
 local BuyStatus = QOLTab:CreateLabel("Status: Idle")
 
 QOLTab:CreateSection("Ammo Selection")
@@ -253,6 +269,14 @@ local function GetNearestShop()
             if dist < lastDist then lastDist = dist; nearest = shop end
         end
     end
+    
+    local crate = interact:FindFirstChild("SurvivalSupplyCrate")
+    if crate and crate:FindFirstChild("base") then
+        local base = crate.base
+        local dist = (player.Character.HumanoidRootPart.Position - base.Position).Magnitude
+        if dist < lastDist then lastDist = dist; nearest = base end
+    end
+    
     return nearest
 end
 
@@ -275,7 +299,7 @@ runService.RenderStepped:Connect(function(delta)
                 if selectedAmmo[name] then
                     BuyStatus:Set("Buying: " .. name)
                     pcall(function() 
-                        replicatedStorage.Library.RemotesManager.ShopService:InvokeServer("buyammo", { StoreObj = shop }, id) 
+                        replicatedStorage.Library.RemotesManager.ShopService:InvokeServer("buyammo", { StoreObj = shop }, id, "Inventory") 
                     end)
                     task.wait(0.1)
                 end
