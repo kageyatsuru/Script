@@ -25,13 +25,14 @@ local DataModule = require(player:WaitForChild("DataModule", 30))
 
 _G.SilentAimEnabled = false
 _G.AimbotEnabled = false
+_G.KillAuraEnabled = false -- New Toggle Variable
 _G.AutoReload = false
 _G.InfAmmo = false 
 _G.ShowFOV = false
 _G.TPBehind = false
 _G.TPDist = 5
 
-local weapon = "ak47"
+local weapon = "fnfal" 
 local globalFOV = 150
 local globalDist = 600
 local smoothing = 0.5
@@ -46,7 +47,8 @@ local ammoIDs = {
     ["Flamethrower"] = "#939", ["AWP"] = "#367", ["Minigun"] = "#416", 
     ["Tactical Bow"] = "#797", ["Dual P250"] = "#886",
     ["Grenade Launcher"] = "#1064", ["Revolver 454"] = "#1110",
-    ["FNFAL"] = "#1370", ["CZ-Scorpion"] = "#1369", ["Mariner 590"] = "#1481"
+    ["FNFAL"] = "#1370", ["CZ-Scorpion"] = "#1369", ["Mariner 590"] = "#1481",
+    ["AT4 Rocket Launcher"] = "#2028", ["Desert Eagle"] = "#1723"
 }
 
 local selectedAmmo = {}
@@ -157,6 +159,22 @@ CombatTab:CreateSlider({
    CurrentValue = 5,
    Flag = "TPDistSlider",
    Callback = function(v) _G.TPDist = v end,
+})
+
+-- NEW: KILL AURA SECTION AT THE BOTTOM
+CombatTab:CreateSection("— Kill Aura —")
+local KillAuraToggle = CombatTab:CreateToggle({
+   Name = "Enable Kill Aura (360°)",
+   CurrentValue = false,
+   Flag = "KillAura_Tog",
+   Callback = function(v) _G.KillAuraEnabled = v end,
+})
+
+CombatTab:CreateKeybind({
+   Name = "Kill Aura Keybind",
+   CurrentKeybind = "V",
+   Flag = "KA_Key",
+   Callback = function() KillAuraToggle:Set(not _G.KillAuraEnabled) end,
 })
 
 -- [[ QOL TAB ]]
@@ -305,7 +323,7 @@ runService.RenderStepped:Connect(function(delta)
                 end
             end
             
-            -- NEW: REFILL AMMO POUCH CHARGES
+            -- REFILL AMMO POUCH CHARGES
             if _G.AutoReload then
                 BuyStatus:Set("Refilling Pouch...")
                 pcall(function()
@@ -322,12 +340,28 @@ runService.RenderStepped:Connect(function(delta)
     local entities = workspace:FindFirstChild("Entity")
     if not entities then return end
 
+    -- TARGETING LOGIC
     local target, minScore = nil, math.huge
     for _, v in pairs(entities:GetChildren()) do
         local t = v:FindFirstChild("Head") or v:FindFirstChild("HumanoidRootPart")
         local h = v:FindFirstChildOfClass("Humanoid") or v:FindFirstChild("Zombie")
         if t and h and h.Health > 0 then
             local dist = (char.HumanoidRootPart.Position - t.Position).Magnitude
+            
+            -- KILL AURA LOGIC (Ignores FOV/Screen checks)
+            if _G.KillAuraEnabled and dist < globalDist and gun and cd <= 0 then
+                replicatedStorage.Library.RemotesManager.PrimaryFire:FireServer("#1", gun, {
+                    ["ShotPoint"] = char.HumanoidRootPart.Position, ["Direction"] = (t.Position - char.HumanoidRootPart.Position).Unit, 
+                    ["AmmoData"] = {["MaxAmmo"] = 0, ["Ammo"] = 0}, ["TracerColor"] = Color3.new(1, 1, 1),
+                    ["ShotId"] = 322, ["HitInfoList"] = {{["Part"] = t, ["Position"] = t.Position, ["Normal"] = Vector3.new(0,1,0)}},
+                    ["ShotOrigin"] = gun.Handle.BulletOrigin, ["Victims"] = {{["Humanoid"] = h, ["Object"] = t}},
+                    ["TargetPoints"] = {t.Position}
+                })
+                cd = FIRE_RATE
+                break -- Hits one zombie per frame to maintain fire rate
+            end
+
+            -- SILENT AIM / AIMBOT LOGIC
             local screenPos, onScreen = camera:WorldToViewportPoint(t.Position)
             local mouseDist = (Vector2.new(screenPos.X, screenPos.Y) - center).Magnitude
 
